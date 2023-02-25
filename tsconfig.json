@@ -12,10 +12,16 @@
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
+    "strict": true,
     "strictNullChecks": false,
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
-    "noFallthroughCasesInSwitch": false
+    "noFallthroughCasesInSwitch": false,
+    "paths": {
+      "@config": ["src/config/index"],
+      "@utils/*": ["src/utils/*"],
+      "@constants": ["src/constants/index"]
+    }
   }
 }
