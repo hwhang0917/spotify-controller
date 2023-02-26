@@ -4,10 +4,20 @@
 
 # Spotify Bot
 
-> Slack bot to control spotify shared playler queue.
+> Slack bot to control Spotify shared player queue.
 
 [![Author](https://img.shields.io/badge/author-RunFridge-green?style=flat)](https://github.com/hwhang0917)
 [![License](https://img.shields.io/github/license/RunFridge/film-book)](https://github.com/hwhang0917/spotify-bot/blob/master/LICENSE)
+
+## Translations
+
+- [한국어](docs/README_ko.md)
+
+## Requirements
+
+- Node.js ^16.17.0
+- Spotify Premium Account
+- GUI Browser
 
 ## Setup Guide
 
