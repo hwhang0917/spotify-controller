@@ -16,7 +16,7 @@ export const SPOTIFY_API_URL = 'https://api.spotify.com';
 
 /** Spotify API Scope */
 export const SPOTIFY_SCOPE =
-  'user-modify-playback-state user-read-currently-playing';
+  'user-read-playback-state user-modify-playback-state user-read-currently-playing';
 
 /** DEFAULT PORT */
 export const DEFAULT_PORT = 5555;

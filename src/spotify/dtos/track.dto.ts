@@ -1,5 +1,9 @@
 export class TrackDto {
   /**
+   * Spotify URI [reference](https://developer.spotify.com/documentation/web-api/#spotify-uris-and-ids)
+   */
+  uri: string;
+  /**
    * Spotify Unique ID
    */
   id: string;

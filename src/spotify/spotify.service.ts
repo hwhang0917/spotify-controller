@@ -16,6 +16,9 @@ import type { ISpotifySongSearchResponse } from 'src/types/spotify-api';
 import type { CurrentTrackDto, SearchTrackResultDto, TrackDto } from './dtos';
 import { ISpotifyCurrentlyPlayingTrack } from 'src/types/spotify-currently-playing-trxk';
 import { listFormatter } from '@utils/string';
+import { getLanguageLocale } from '@utils/locale';
+import { QueueDto } from './dtos/queue.dto';
+import { ISpotifyQueueResponse } from 'src/types/spotify-queue';
 
 @Injectable()
 export class SpotifyService {
@@ -41,7 +44,7 @@ export class SpotifyService {
         params: {
           q,
           type: 'track',
-          market: 'KR',
+          market: getLanguageLocale().split('_').at(-1),
           limit: PAGE_SIZE,
           offset,
         },
@@ -58,6 +61,7 @@ export class SpotifyService {
           song.album.images?.at(0)?.url ?? ALBUM_COVER_PLACEHOLDER;
 
         return {
+          uri: song.uri,
           id: song.id,
           name: song.name,
           artists,
@@ -97,7 +101,7 @@ export class SpotifyService {
       const { data } = await api.get<ISpotifyCurrentlyPlayingTrack>(
         '/v1/me/player/currently-playing',
         {
-          params: { market: 'KR' },
+          params: { market: getLanguageLocale().split('_').at(-1) },
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
@@ -110,12 +114,15 @@ export class SpotifyService {
       }
 
       // Parse data
-      const artistsNameArray = data.item.artists.map(({ name }) => name);
+      const artistsNameArray = data.item?.artists?.map(({ name }) => name) ?? [
+        'Unknown',
+      ];
       const artists = listFormatter.format(artistsNameArray);
       const coverImageUrl =
         data.item.album.images?.at(0)?.url ?? ALBUM_COVER_PLACEHOLDER;
 
       const currentTrack: CurrentTrackDto = {
+        uri: data.item.uri,
         id: data.item.id,
         artists,
         name: data.item.name,
@@ -138,7 +145,75 @@ export class SpotifyService {
 
   async getQueue() {
     try {
-    } catch (err) {
+      // Get Access Token
+      const accessToken = await this.cacheManager.get(SPOTIFY_ACCESS_TOKEN);
+      if (!accessToken) {
+        throw new UnauthorizedException('login_required');
+      }
+
+      // Request Spotify Player Queue API
+      const { data } = await api.get<ISpotifyQueueResponse>(
+        '/v1/me/player/queue',
+        {
+          params: { market: getLanguageLocale().split('_').at(-1) },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+
+      // If nothing is playing return undefined
+      if (!data) {
+        return undefined;
+      }
+
+      // Parse Data
+      // Parse Current Track
+      const artistsNameArray = data.currently_playing?.artists?.map(
+        ({ name }) => name,
+      ) ?? ['Unknown'];
+      const artists = listFormatter.format(artistsNameArray);
+      const coverImageUrl =
+        data.currently_playing.album.images?.at(0)?.url ??
+        ALBUM_COVER_PLACEHOLDER;
+      const currentTrack: TrackDto = {
+        uri: data.currently_playing.uri,
+        id: data.currently_playing.id,
+        artists,
+        name: data.currently_playing.name,
+        coverImageUrl,
+        durationMs: data.currently_playing.duration_ms,
+        explicit: data.currently_playing.explicit,
+        href: data.currently_playing.href,
+        previewUrl: data.currently_playing.preview_url,
+      };
+      // Parse Queue
+      const queue: Array<TrackDto> = data.queue.map((song) => {
+        const artistsNameArray = song.artists.map(({ name }) => name);
+        const artists = listFormatter.format(artistsNameArray);
+        const coverImageUrl =
+          song.album.images?.at(0)?.url ?? ALBUM_COVER_PLACEHOLDER;
+
+        return {
+          uri: song.uri,
+          id: song.id,
+          name: song.name,
+          artists,
+          previewUrl: song.preview_url,
+          coverImageUrl,
+          durationMs: song.duration_ms,
+          explicit: song.explicit,
+          href: song.href,
+        };
+      });
+      const pasredData: QueueDto = {
+        currentTrack,
+        queue,
+      };
+
+      return pasredData;
+    } catch (err: any) {
+      console.dir(err.response);
       this.logger.error(err);
       throw err;
     }

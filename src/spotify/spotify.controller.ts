@@ -39,7 +39,7 @@ export class SpotifyController {
 
   @Get('queue')
   async getQueue() {
-    return;
+    return this.spotifyService.getQueue();
   }
 
   @Post('queue')
