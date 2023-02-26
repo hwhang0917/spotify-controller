@@ -25,10 +25,7 @@ import {
 import { generateRandomHash } from '@utils/random';
 import type { Response } from 'express';
 import type { Cache } from 'cache-manager';
-import {
-  ISpotifyAccessTokenResponse,
-  ISpotifyRenewAccessTokenResponse,
-} from './types/spotify-account';
+import type { ISpotifyAccessTokenResponse } from './types/spotify-account';
 
 @Controller()
 export class AppController {
@@ -115,46 +112,6 @@ export class AppController {
         },
       );
       res.send(staticHtml);
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  @Get('renew-token')
-  async renewToken() {
-    try {
-      const clientId = await this.config.get(SPOTIFY_CLIENT_ID);
-      const secret = await this.config.get(SPOTIFY_SECRET);
-      const basicToken = Buffer.from(clientId + ':' + secret).toString(
-        'base64',
-      );
-
-      const refresh_token = await this.cacheManager.get(SPOTIFY_REFRESH_TOKEN);
-      if (!refresh_token) {
-        throw new BadRequestException('refresh_token_not_found');
-      }
-
-      // Request Spotify Access Token Renewal
-      const { data } = await axios<ISpotifyRenewAccessTokenResponse>({
-        method: 'post',
-        baseURL: SPOTIFY_ACCOUNT_URL,
-        url: '/api/token',
-        data: qs.stringify({
-          grant_type: 'refresh_token',
-          refresh_token,
-        }),
-        headers: {
-          Authorization: `Basic ${basicToken}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      });
-
-      // Store Renewed Access Token in Cache
-      await this.cacheManager.set(
-        SPOTIFY_ACCESS_TOKEN,
-        data.access_token,
-        ms('1 hour'),
-      );
     } catch (err) {
       throw err;
     }
