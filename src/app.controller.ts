@@ -8,10 +8,8 @@ import {
   CACHE_MANAGER,
   Controller,
   Get,
-  Headers,
   Inject,
   Query,
-  Req,
   Res,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
