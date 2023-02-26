@@ -43,7 +43,7 @@ export class SpotifyController {
   }
 
   @Post('queue')
-  async addTrackToQueue(@Query('id') spotifyTrackId: string) {
-    return;
+  async addTrackToQueue(@Query('id') trackId: string) {
+    return this.spotifyService.addTrackToQueue(trackId);
   }
 }

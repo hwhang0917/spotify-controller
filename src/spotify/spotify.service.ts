@@ -2,8 +2,11 @@ import {
   Inject,
   Injectable,
   UnauthorizedException,
-  CACHE_MANAGER,
   Logger,
+  CACHE_MANAGER,
+  NotFoundException,
+  InternalServerErrorException,
+  BadRequestException,
 } from '@nestjs/common';
 import { api } from '@utils/api';
 import {
@@ -19,6 +22,9 @@ import { listFormatter } from '@utils/string';
 import { getLanguageLocale } from '@utils/locale';
 import { QueueDto } from './dtos/queue.dto';
 import { ISpotifyQueueResponse } from 'src/types/spotify-queue';
+import { AxiosError } from 'axios';
+import { HttpErrorByCode } from '@nestjs/common/utils/http-error-by-code.util';
+import { CommonResponseDto } from 'src/common/dto/common-response.dto';
 
 @Injectable()
 export class SpotifyService {
@@ -137,7 +143,6 @@ export class SpotifyService {
 
       return currentTrack;
     } catch (err: any) {
-      console.dir(err?.response?.data);
       this.logger.error(err);
       throw err;
     }
@@ -213,7 +218,49 @@ export class SpotifyService {
 
       return pasredData;
     } catch (err: any) {
-      console.dir(err.response);
+      this.logger.error(err);
+      throw err;
+    }
+  }
+
+  /**
+   * Calls Spotify Add Item to Playback Queue API
+   * @param trakcId
+   */
+  async addTrackToQueue(trackId: string): Promise<CommonResponseDto> {
+    try {
+      // Get Access Token
+      const accessToken = await this.cacheManager.get(SPOTIFY_ACCESS_TOKEN);
+      if (!accessToken) {
+        throw new UnauthorizedException('login_required');
+      }
+
+      // Request Spotify Add Playback Queue API
+      const { status } = await api({
+        method: 'post',
+        url: '/v1/me/player/queue',
+        params: {
+          uri: `spotify:track:${trackId}`,
+        },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (status !== 204) {
+        throw new InternalServerErrorException();
+      }
+
+      return {
+        success: true,
+        message: `Added 'spotify:track:${trackId}' to player queue.`,
+      };
+    } catch (err) {
+      if (err instanceof AxiosError) {
+        if (400 <= err.response.status && err.response.status < 500) {
+          throw new BadRequestException(err.response.data?.error?.message);
+        }
+      }
       this.logger.error(err);
       throw err;
     }
