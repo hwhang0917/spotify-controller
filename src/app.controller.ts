@@ -19,6 +19,7 @@ import {
   SPOTIFY_ACCOUNT_URL,
   SPOTIFY_CLIENT_ID,
   SPOTIFY_REFRESH_TOKEN,
+  SPOTIFY_SCOPE,
   SPOTIFY_SECRET,
   SPOTIFY_STATE,
 } from '@constants';
@@ -48,7 +49,7 @@ export class AppController {
         qs.stringify({
           response_type: 'code',
           client_id,
-          scope: 'user-modify-playback-state',
+          scope: SPOTIFY_SCOPE,
           redirect_uri: REDIRECT_URI,
           state,
         }),

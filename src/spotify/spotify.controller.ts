@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   ParseIntPipe,
+  Post,
   Query,
 } from '@nestjs/common';
 import { SpotifyService } from './spotify.service';
@@ -29,5 +30,20 @@ export class SpotifyController {
     page: number,
   ) {
     return this.spotifyService.searchSongs(q, page);
+  }
+
+  @Get('current')
+  async getCurrentlyPlayingTrack() {
+    return this.spotifyService.getCurrentlyPlayingTrack();
+  }
+
+  @Get('queue')
+  async getQueue() {
+    return;
+  }
+
+  @Post('queue')
+  async addTrackToQueue(@Query('id') spotifyTrackId: string) {
+    return;
   }
 }

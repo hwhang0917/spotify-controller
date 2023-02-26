@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="https://unpkg.com/mvp.css@1.12/mvp.css" />
-    <title>Complete</title>
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
+    <title>Spotify Bot</title>
   </head>
   <body>
     <header>
@@ -22,6 +23,9 @@
         >
       </p>
     </header>
+    <main>
+      <section id="current"></section>
+    </main>
     <footer>
       <hr />
       <p>
@@ -31,10 +35,43 @@
           >
           &copy; 2023 Spotify Bot</small
         >
+        <small
+          >&centerdot; Styled With
+          <a href="https://andybrewer.github.io/mvp/" target="_blank"
+            >MVP.CSS</a
+          ></small
+        >
       </p>
     </footer>
     <script>
       window.history.pushState({}, document.title, window.location.pathname);
+      const currentSection = document.getElementById('current');
+
+      const createCurrentlyPlayingCard = async () => {
+        try {
+          const res = await fetch('/spotify/current');
+          const data = await res.json();
+          if (!data) return;
+
+          currentSection.innerHTML = `
+            <aside>
+              <p>Current Song</p>
+              <figure>
+                <img width="150" height="150"
+                src="${data.coverImageUrl}" /
+                >
+              </figure>
+              <h3>
+                ${data.name}
+                ${data.isPlaying ? '<sup>playing</sup>' : ''}
+              <p><small>By ${data.artists}</small></p>
+            </aside>`;
+        } catch (err) {
+          console.error(err);
+        }
+      };
+
+      createCurrentlyPlayingCard();
     </script>
   </body>
 </html>

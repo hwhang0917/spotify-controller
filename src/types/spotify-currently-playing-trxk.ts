@@ -2,8 +2,19 @@ interface ExternalUrls {
   spotify: string;
 }
 
-interface Artist {
+interface Context {
   external_urls: ExternalUrls;
+  href: string;
+  type: string;
+  uri: string;
+}
+
+interface ExternalUrls2 {
+  spotify: string;
+}
+
+interface Artist {
+  external_urls: ExternalUrls2;
   href: string;
   id: string;
   name: string;
@@ -11,7 +22,7 @@ interface Artist {
   uri: string;
 }
 
-interface ExternalUrls2 {
+interface ExternalUrls3 {
   spotify: string;
 }
 
@@ -24,7 +35,7 @@ interface Image {
 interface Album {
   album_type: string;
   artists: Artist[];
-  external_urls: ExternalUrls2;
+  external_urls: ExternalUrls3;
   href: string;
   id: string;
   images: Image[];
@@ -36,12 +47,12 @@ interface Album {
   uri: string;
 }
 
-interface ExternalUrls3 {
+interface ExternalUrls4 {
   spotify: string;
 }
 
 interface Artist2 {
-  external_urls: ExternalUrls3;
+  external_urls: ExternalUrls4;
   href: string;
   id: string;
   name: string;
@@ -53,7 +64,7 @@ interface ExternalIds {
   isrc: string;
 }
 
-interface ExternalUrls4 {
+interface ExternalUrls5 {
   spotify: string;
 }
 
@@ -64,7 +75,7 @@ interface Item {
   duration_ms: number;
   explicit: boolean;
   external_ids: ExternalIds;
-  external_urls: ExternalUrls4;
+  external_urls: ExternalUrls5;
   href: string;
   id: string;
   is_local: boolean;
@@ -77,16 +88,20 @@ interface Item {
   uri: string;
 }
 
-interface Tracks {
-  href: string;
-  items: Item[];
-  limit: number;
-  next: string;
-  offset: number;
-  previous?: any;
-  total: number;
+interface Disallows {
+  resuming: boolean;
 }
 
-export interface ISpotifySongSearchResponse {
-  tracks: Tracks;
+interface Actions {
+  disallows: Disallows;
+}
+
+export interface ISpotifyCurrentlyPlayingTrack {
+  timestamp: number;
+  context: Context;
+  progress_ms: number;
+  item: Item;
+  currently_playing_type: string;
+  actions: Actions;
+  is_playing: boolean;
 }
