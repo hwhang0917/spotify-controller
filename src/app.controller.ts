@@ -27,6 +27,7 @@ import { generateRandomHash } from '@utils/random';
 import type { Response } from 'express';
 import type { Cache } from 'cache-manager';
 import type { ISpotifyAccessTokenResponse } from './types/spotify-account';
+import { getLanguageLocale } from '@utils/locale';
 
 @Controller()
 export class AppController {
@@ -106,11 +107,13 @@ export class AppController {
       await this.cacheManager.set(SPOTIFY_REFRESH_TOKEN, data.refresh_token, 0);
 
       // render static HTML
+      let htmlFilename = 'landing-en.html';
+      if (getLanguageLocale().includes('ko')) {
+        htmlFilename = 'landing-ko.html';
+      }
       const staticHtml = await readFile(
-        join(__dirname, 'static', 'index.html'),
-        {
-          encoding: 'utf8',
-        },
+        join(__dirname, 'static', htmlFilename),
+        { encoding: 'utf8' },
       );
       res.send(staticHtml);
     } catch (err) {

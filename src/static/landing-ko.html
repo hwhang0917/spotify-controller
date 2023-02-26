@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ko" color-mode="user">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="https://unpkg.com/mvp.css@1.12/mvp.css" />
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
+    <title>Spotify Bot</title>
+    <style>
+      footer p {
+        display: flex;
+        justify-content: space-between;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <figure>
+        <img
+          width="150"
+          src="https://media3.giphy.com/media/y4PQTcLTYJwOI/giphy.gif"
+          alt="Snoopy Dancing"
+        />
+      </figure>
+      <h1>
+        🎉 <a href="https://www.spotify.com/" target="_blank">스포티파이</a>에
+        성공적으로 로그인되었습니다. 🎉
+      </h1>
+      <h2>페이지를 닫으셔도 됩니다. 🤗</h2>
+      <p>
+        더 자세한 정보를 읽어보시려면:
+        <a
+          href="https://github.com/hwhang0917/spotify-bot#readme"
+          target="_blank"
+        >
+          README </a
+        >를 참조하세요.
+      </p>
+      <section id="current">
+        <aside>
+          <p>🎵 현재 음악 🎵</p>
+          <figure>
+            <img width="150" height="150" id="cover-img"
+            src="https://via.placeholder.com/512.png/202020/ffffff?text=No%20Album%20Cover"
+            / >
+          </figure>
+          <h3 id="title">로딩중</h3>
+          <p><small id="artist">By 로딩중</small></p>
+        </aside>
+      </section>
+      <section>
+        <button id="reload">&#8635; 다시 불러오기</button>
+      </section>
+    </header>
+    <footer>
+      <hr />
+      <p>
+        <small
+          ><a href="https://github.com/hwhang0917" target="_blank"
+            >hwhang0917</a
+          >
+          &copy; 2023 Spotify Bot</small
+        >
+        <small
+          >Styled With
+          <a href="https://andybrewer.github.io/mvp/" target="_blank"
+            >MVP.CSS</a
+          ></small
+        >
+      </p>
+    </footer>
+    <script>
+      window.history.pushState({}, document.title, '/');
+      const currentSection = document.getElementById('current');
+      const coverImg = document.getElementById('cover-img');
+      const title = document.getElementById('title');
+      const artist = document.getElementById('artist');
+
+      let timeLeft = 0;
+
+      const createCurrentlyPlayingCard = async () => {
+        try {
+          const res = await fetch('/spotify/current');
+          const data = await res.json();
+
+          timeLeft = data.durationMs - data.progressMs;
+
+          if (!data) return;
+
+          coverImg.src = data.coverImageUrl;
+
+          if (data.isPlaying) {
+            title.innerHTML = `${data.name}<sup>playing</sup>`;
+          } else {
+            title.innerText = data.name;
+          }
+
+          artist.innerText = `By ${data.artists}`;
+        } catch (err) {
+          console.error(err);
+        }
+      };
+
+      createCurrentlyPlayingCard();
+
+      const reloadButton = document.getElementById('reload');
+      reloadButton.addEventListener('click', createCurrentlyPlayingCard);
+
+      setInterval(() => {
+        timeLeft -= 1000;
+        if (timeLeft < -1000) createCurrentlyPlayingCard();
+      }, 1000);
+    </script>
+  </body>
+</html>
