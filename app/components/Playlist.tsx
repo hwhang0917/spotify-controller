@@ -30,21 +30,26 @@ interface IProps {
 }
 
 export const Playlist: React.FC<IProps> = ({ data, isLoading }) => {
-  const SkeletonLoadingList = Array.from({ length: 10 }, () => null).map(() => (
-    <ListItem>
-      <ListItemAvatar>
-        <Skeleton variant="circular" sx={{ width: 50, height: 50 }} />
-      </ListItemAvatar>
-      <ListItemText
-        primary={
-          <Skeleton variant="text" sx={{ fontSize: "1.5rem", width: "10%" }} />
-        }
-        secondary={
-          <Skeleton variant="text" sx={{ fontSize: "1rem", width: "15%" }} />
-        }
-      />
-    </ListItem>
-  ));
+  const SkeletonLoadingList = Array.from({ length: 10 }, () => null).map(
+    (_, i) => (
+      <ListItem key={i}>
+        <ListItemAvatar>
+          <Skeleton variant="circular" sx={{ width: 50, height: 50 }} />
+        </ListItemAvatar>
+        <ListItemText
+          primary={
+            <Skeleton
+              variant="text"
+              sx={{ fontSize: "1.5rem", width: "10%" }}
+            />
+          }
+          secondary={
+            <Skeleton variant="text" sx={{ fontSize: "1rem", width: "15%" }} />
+          }
+        />
+      </ListItem>
+    )
+  );
 
   if (isLoading) {
     return <Wrapper>{SkeletonLoadingList}</Wrapper>;
