@@ -4,7 +4,6 @@ import {
   UnauthorizedException,
   Logger,
   CACHE_MANAGER,
-  NotFoundException,
   InternalServerErrorException,
   BadRequestException,
 } from '@nestjs/common';
@@ -23,7 +22,6 @@ import { getLanguageLocale } from '@utils/locale';
 import { QueueDto } from './dtos/queue.dto';
 import { ISpotifyQueueResponse } from 'src/types/spotify-queue';
 import { AxiosError } from 'axios';
-import { HttpErrorByCode } from '@nestjs/common/utils/http-error-by-code.util';
 import { CommonResponseDto } from 'src/common/dto/common-response.dto';
 
 @Injectable()

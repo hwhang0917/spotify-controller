@@ -23,7 +23,7 @@ export const DEFAULT_PORT = 5555;
 /** Redirect URL */
 export const REDIRECT_URI = `http://localhost:${DEFAULT_PORT}/callback`;
 /** Pagination Page Size */
-export const PAGE_SIZE = 10;
+export const PAGE_SIZE = 20;
 
 /** No Album Cover Placeholder Image */
 export const ALBUM_COVER_PLACEHOLDER =

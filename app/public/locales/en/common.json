@@ -1,4 +1,9 @@
 {
   "title": "Spotify Controller",
-  "search": "Search for song"
+  "search": "Search for song",
+  "no-result": "No Result",
+  "add-confirm": "Are you sure you want to add to playlist?",
+  "confirm": "confirm",
+  "cancel": "cancel",
+  "add-queue-success": "Successfully added song to playlist queue."
 }

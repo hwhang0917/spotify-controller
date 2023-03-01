@@ -125,7 +125,7 @@ export const CurrentSong: React.FC = () => {
               {/* Playing chip */}
               {data.isPlaying && (
                 <Box sx={{ marginTop: "1rem" }}>
-                  <Chip label="playing" color="primary" />
+                  <Chip label="Now playing" color="primary" />
                 </Box>
               )}
             </CardContent>

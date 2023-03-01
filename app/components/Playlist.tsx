@@ -1,8 +1,5 @@
 import { IPlaylist } from "@interfaces/playlist";
 import { Box, Container } from "@mui/system";
-import { FixedSizeList, ListChildComponentProps } from "react-window";
-import axios from "axios";
-import { useQuery } from "react-query";
 import {
   Avatar,
   List,
@@ -17,22 +14,22 @@ import React from "react";
 const Wrapper = ({ children }: { children: React.ReactNode }) => {
   return (
     <Box>
-      <Typography variant="h5">재생목록</Typography>
-      <List sx={{ width: "100%", height: "calc(80px*9)", overflow: "scroll" }}>
+      <Typography variant="h5" margin="1em 0">
+        💿 재생목록
+      </Typography>
+      <List sx={{ width: "100%", height: "calc(80px*7)", overflow: "scroll" }}>
         {children}
       </List>
     </Box>
   );
 };
 
-export const Playlist = () => {
-  const fetchPlaylist = async () => {
-    const { data } = await axios.get<IPlaylist>("/webapi/spotify/queue");
-    return data;
-  };
+interface IProps {
+  isLoading: boolean;
+  data?: IPlaylist;
+}
 
-  const { isLoading, data } = useQuery(["playlist"], fetchPlaylist);
-
+export const Playlist: React.FC<IProps> = ({ data, isLoading }) => {
   const SkeletonLoadingList = Array.from({ length: 10 }, () => null).map(() => (
     <ListItem>
       <ListItemAvatar>
