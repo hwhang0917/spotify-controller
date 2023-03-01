@@ -125,7 +125,7 @@ export class SpotifyService {
       ];
       const artists = listFormatter.format(artistsNameArray);
       const coverImageUrl =
-        data.item.album.images?.at(0)?.url ?? ALBUM_COVER_PLACEHOLDER;
+        data.item?.album.images?.at(0)?.url ?? ALBUM_COVER_PLACEHOLDER;
 
       const currentTrack: CurrentTrackDto = {
         uri: data.item.uri,

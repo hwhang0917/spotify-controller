@@ -8,7 +8,8 @@ const getLocaleEnv = () => {
     process.env.LANG ||
     process.env.LANGUAGE ||
     process.env.LC_ALL ||
-    process.env.LC_MESSAGES
+    process.env.LC_MESSAGES ||
+    'en_US.UTF8'
   );
 };
 
