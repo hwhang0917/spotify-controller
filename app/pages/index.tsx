@@ -6,11 +6,25 @@ import "@fontsource/roboto/300.css";
 import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
 import "@fontsource/roboto/700.css";
-import { Box, Container } from "@mui/system";
-import { Grid, InputAdornment, TextField } from "@mui/material";
+import { Box, Container, Stack } from "@mui/system";
+import {
+  CardMedia,
+  Fab,
+  Grid,
+  InputAdornment,
+  List,
+  ListItem,
+  ListItemButton,
+  TextField,
+  Typography,
+} from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
-import { useDeferredValue, useState } from "react";
+import { useContext, useDeferredValue, useState } from "react";
 import { CurrentSong } from "@components/CurrentSong";
+import { useQuery } from "react-query";
+import { ISearchSongResponse } from "@interfaces/search-songs";
+import axios from "axios";
+import { Playlist } from "@components/Playlist";
 
 export const getStaticProps: GetStaticProps = async ({ locale = "en" }) => ({
   props: {
@@ -23,6 +37,29 @@ export default function Index() {
   const [query, setQuery] = useState<string>("");
   const deferredQuery = useDeferredValue(query);
 
+  const fetchSearchTrack = async (q: string) => {
+    const { data } = await axios.get<ISearchSongResponse>(
+      "/webapi/spotify/search",
+      {
+        params: {
+          q,
+          page: 1,
+        },
+      }
+    );
+    return data;
+  };
+
+  const { data: searchResult, isLoading } = useQuery(
+    ["search-song", deferredQuery],
+    async () => {
+      return await fetchSearchTrack(deferredQuery);
+    },
+    {
+      enabled: deferredQuery !== "",
+    }
+  );
+
   return (
     <>
       <Head>
@@ -34,15 +71,21 @@ export default function Index() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      {/* 검색 창 */}
+      {/* Search Section */}
       <Grid container spacing={2}>
-        <Grid item xs={4}>
+        <Grid item xs={4} sx={{ overflowY: "scroll", height: "100vh" }}>
           <Container maxWidth="md">
             <Box
               component="form"
               sx={{
-                padding: "2em",
+                position: "sticky",
+                marginTop: "2em",
+                top: "2em",
+                zIndex: 100,
+                backgroundColor: "rgba(0,0,0,0.1)",
+                backdropFilter: "blur(1.5rem)",
               }}
+              onSubmit={(e) => e.preventDefault()}
             >
               <TextField
                 label={t("search")}
@@ -61,19 +104,30 @@ export default function Index() {
                 fullWidth
               />
             </Box>
+            <List>
+              {searchResult?.data?.map((track, idx) => (
+                <ListItemButton key={idx} id={track.id}>
+                  <CardMedia
+                    component="img"
+                    sx={{ width: 75, marginRight: "1em" }}
+                    image={track.coverImageUrl}
+                    alt={track.name + " album cover"}
+                  />
+                  <Stack>
+                    <Typography variant="h5">{track.name}</Typography>
+                    <Typography variant="body2">By {track.artists}</Typography>
+                  </Stack>
+                </ListItemButton>
+              ))}
+            </List>
           </Container>
         </Grid>
-        <Grid item xs={8} sx={{ overflowY: "scroll", height: "100vh" }}>
-          {/* 현재 재생 중 */}
-          <Container
-            sx={{
-              position: "sticky",
-              top: "0",
-              backgroundColor: "rgba(0,0,0,0.3)",
-            }}
-          >
+        {/* Playlist section */}
+        <Grid item xs={8}>
+          <Container>
             <CurrentSong />
           </Container>
+          <Playlist />
         </Grid>
       </Grid>
     </>

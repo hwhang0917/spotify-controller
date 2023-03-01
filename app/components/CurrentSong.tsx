@@ -4,14 +4,12 @@ import {
   CardContent,
   CardMedia,
   Chip,
-  LinearProgress,
   Skeleton,
   Typography,
 } from "@mui/material";
 import { Box, Container } from "@mui/system";
 import { useQuery } from "react-query";
 import type { ICurrentSongResponse } from "@interfaces/current-song";
-import { useMemo, useState } from "react";
 
 const Wrapper = ({ children }: { children: React.ReactNode }) => {
   return (
@@ -27,7 +25,9 @@ const Wrapper = ({ children }: { children: React.ReactNode }) => {
           sx={{
             display: "flex",
             justifyContent: "space-between",
-            minWidth: 512,
+            width: "100%",
+            backgroundColor: "rgba(17,17,17,0.3)",
+            backdropFilter: "blur(1.5rem)",
           }}
         >
           {children}
@@ -51,7 +51,30 @@ export const CurrentSong: React.FC = () => {
   if (isLoading) {
     return (
       <Wrapper>
-        <Skeleton variant="rounded" />
+        <Box sx={{ display: "flex", flexDirection: "column" }}>
+          <CardContent sx={{ flex: "1 0 auto" }}>
+            <Skeleton
+              variant="text"
+              sx={{ width: 512 * 0.7, fontSize: "1.5rem" }}
+            />
+            <Skeleton
+              variant="text"
+              sx={{ width: 512 * 0.3, fontSize: "1rem" }}
+            />
+            <Box sx={{ marginTop: "1rem" }}>
+              <Skeleton
+                variant="rounded"
+                sx={{
+                  width: 70,
+                  height: 30,
+                  borderRadius: "1em",
+                  marginTop: "1em",
+                }}
+              />
+            </Box>
+          </CardContent>
+        </Box>
+        <Skeleton variant="rectangular" sx={{ width: 151, height: 151 }} />
       </Wrapper>
     );
   } else {
