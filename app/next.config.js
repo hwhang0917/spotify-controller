@@ -2,6 +2,7 @@ const { i18n } = require("./next-i18next.config");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  swcMinify: true,
   reactStrictMode: true,
   images: {
     domains: ["https://i.scdn.co/image"],
