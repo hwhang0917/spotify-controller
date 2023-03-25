@@ -1,7 +1,7 @@
 {
-  "name": "spotify-bot",
+  "name": "spotify-controller",
   "version": "1.0.0",
-  "repository": "https://github.com/hwhang0917/spotify-bot.git",
+  "repository": "https://github.com/hwhang0917/spotify-controller.git",
   "author": "Heesang Whang <hwhang0917@gmail.com>",
   "license": "MIT",
   "private": true,

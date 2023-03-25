@@ -2,9 +2,9 @@
    <img src="public/icon.png" width="200px"/>
 </p>
 
-# Spotify Bot
+# Spotify Controller
 
-> Slack bot to control Spotify shared player queue.
+> Web based Spotify playlist controller
 
 [![Author](https://img.shields.io/badge/author-RunFridge-green?style=flat)](https://github.com/hwhang0917)
 [![License](https://img.shields.io/github/license/RunFridge/film-book)](https://github.com/hwhang0917/spotify-bot/blob/master/LICENSE)

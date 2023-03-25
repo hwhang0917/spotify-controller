@@ -4,7 +4,7 @@
 
 # Spotify Bot
 
-> 공통 스포티파이 플레이리스트를 관리하는 슬랙 봇입니다.
+> 공통 스포티파이 플레이리스트를 관리하는 웹 애플리케이션입니다.
 
 [![Author](https://img.shields.io/badge/author-RunFridge-green?style=flat)](https://github.com/hwhang0917)
 [![License](https://img.shields.io/github/license/RunFridge/film-book)](https://github.com/hwhang0917/spotify-bot/blob/master/LICENSE)
