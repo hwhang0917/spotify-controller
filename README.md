@@ -35,4 +35,8 @@
 
 7. Fill in contents on the `.env` as it is guided.
 
-8. Run server using `yarn start:dev`.
+8. Run server using `yarn start`.
+
+9. Follow the instructions when browser opens
+
+10. Get your internal private IP address and share `http://${privateIP}:5050` or expose port `5050` to others

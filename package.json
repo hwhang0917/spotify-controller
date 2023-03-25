@@ -1,0 +1,18 @@
+{
+  "name": "spotify-bot",
+  "version": "1.0.0",
+  "repository": "https://github.com/hwhang0917/spotify-bot.git",
+  "author": "Heesang Whang <hwhang0917@gmail.com>",
+  "license": "MIT",
+  "private": true,
+  "workspaces": [
+    "app",
+    "api"
+  ],
+  "scripts": {
+    "start": "concurrently 'cd api && yarn deploy' 'cd app && yarn deploy -p 5050'"
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0"
+  }
+}

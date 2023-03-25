@@ -1,3 +1,4 @@
+import path from 'path';
 import open from 'open';
 import { CacheModule, Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -10,7 +11,11 @@ import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ validationSchema, isGlobal: true }),
+    ConfigModule.forRoot({
+      envFilePath: path.join(process.cwd(), '..', '.env'),
+      validationSchema,
+      isGlobal: true,
+    }),
     CacheModule.register({ isGlobal: true }),
     ScheduleModule.forRoot(),
     SpotifyModule,
