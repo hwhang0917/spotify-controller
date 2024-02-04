@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import "./globals.css";
 
 const notoSansKR = Noto_Sans_KR({ subsets: ["latin"], variable: "--font-noto-kr" });
-const roboto = Roboto({ weight: "400", variable: "--font-roboto" });
+const roboto = Roboto({ subsets: ["latin"], weight: "400", variable: "--font-roboto" });
 
 export const metadata: Metadata = {
     title: "Create Next App",
