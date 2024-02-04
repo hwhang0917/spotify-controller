@@ -37,7 +37,3 @@ next-env.d.ts
 
 # Environment
 .env
-
-# Data Store
-data/*
-!data/README.txt

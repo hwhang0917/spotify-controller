@@ -23,6 +23,7 @@ const config = {
                 baseFont: ["var(--font-noto-kr)", "var(--font-roboto)", ...fontFamily.sans]
             },
             colors: {
+                spotify: "#1dd661",
                 border: "hsl(var(--border))",
                 input: "hsl(var(--input))",
                 ring: "hsl(var(--ring))",
@@ -78,7 +79,7 @@ const config = {
             },
         },
     },
-    plugins: [require("tailwindcss-animate")],
+    plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")]
 } satisfies Config
 
 export default config
