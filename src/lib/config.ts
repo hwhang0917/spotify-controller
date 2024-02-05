@@ -16,3 +16,11 @@ export async function getConfiguration(): Promise<SpotifyControllerConfig> {
   const config = await fs.readFile(configPath, "utf-8");
   return JSON.parse(config) as SpotifyControllerConfig;
 }
+
+/**
+ * Store the configuration in the config.json file
+ */
+export async function storeConfiguration(config: SpotifyControllerConfig) {
+  const configPath = path.join(process.cwd(), "config.json");
+  await fs.writeFile(configPath, JSON.stringify(config), "utf-8");
+}

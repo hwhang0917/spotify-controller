@@ -1,7 +1,1 @@
-{
-  "allowViewing": true,
-  "allowPausing": false,
-  "allowSkipping": false,
-  "language": "korean"
-}
-
+{"language":"korean","allowViewing":false,"allowSkipping":false,"allowPausing":false}

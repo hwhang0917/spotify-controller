@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "@/components/theme-provider";
+import { QueryProvider } from "@/components/query-provider";
 import { Noto_Sans_KR, Roboto } from "next/font/google";
 import { GithubLink } from "@/components/github-link";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -42,11 +43,13 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <nav className="fixed bottom-0 right-0 flex gap-4 p-4">
-            <GithubLink href="https://github.com/hwhang0917/spotify-controller" />
-            <ModeToggle />
-          </nav>
-          {children}
+          <QueryProvider>
+            <nav className="fixed bottom-0 right-0 flex gap-4 p-4">
+              <GithubLink href="https://github.com/hwhang0917/spotify-controller" />
+              <ModeToggle />
+            </nav>
+            {children}
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

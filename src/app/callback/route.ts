@@ -14,7 +14,7 @@ import {
 import Logger from "@/lib/logger";
 import { getMemoryCache } from "@/lib/cache";
 
-let refreshInterval: NodeJS.Timeout | null = null;
+export let refreshInterval: NodeJS.Timeout | null = null;
 
 export async function GET(request: NextRequest) {
   const logger = new Logger("SpotifyAuthCallback");
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
       logger.log("Spotify Access Token has been refreshed");
     }, ms("55 minutes"));
 
-    return NextResponse.redirect(`http://localhost:${process.env.PORT}`);
+    return NextResponse.redirect(`http://localhost:${process.env.PORT}/admin`);
   } catch (error: any) {
     logger.error(error?.message);
     return NextResponse.json(
