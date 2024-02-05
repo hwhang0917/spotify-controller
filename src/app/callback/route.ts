@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
       logger.log("Spotify Access Token has been refreshed");
     }, ms("55 minutes"));
 
-    return NextResponse.redirect(`http://localhost:${process.env.PORT}/admin`);
+    return NextResponse.redirect(`http://localhost:${process.env.PORT}/`);
   } catch (error: any) {
     logger.error(error?.message);
     return NextResponse.json(

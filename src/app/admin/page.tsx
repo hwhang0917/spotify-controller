@@ -3,6 +3,8 @@ export const dynamic = "force-dynamic";
 import ms from "ms";
 import Link from "next/link";
 import Image from "next/image";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { RocketIcon } from "@radix-ui/react-icons";
 import { getMemoryCache } from "@/lib/cache";
 import { generateRandomHash } from "@/lib/random";
@@ -76,6 +78,12 @@ export default async function Home() {
       </main>
     );
   } else {
-    return <Settings initialConfig={config} />;
+    const cookieStore = cookies();
+    const adminToken = cookieStore.get(SPOTIFY_ACCESS_TOKEN);
+    if (!adminToken) {
+      redirect("/");
+    } else {
+      return <Settings initialConfig={config} />;
+    }
   }
 }

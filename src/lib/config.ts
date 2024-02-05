@@ -10,7 +10,11 @@ export async function getConfiguration(): Promise<SpotifyControllerConfig> {
   const configPath = path.join(process.cwd(), "config.json");
   if (!existsSync(configPath)) {
     // Create a default config file
-    await fs.writeFile(configPath, JSON.stringify(DEFAULT_CONFIG), "utf-8");
+    await fs.writeFile(
+      configPath,
+      JSON.stringify(DEFAULT_CONFIG, null, 2),
+      "utf-8",
+    );
     return DEFAULT_CONFIG;
   }
   const config = await fs.readFile(configPath, "utf-8");
@@ -22,5 +26,5 @@ export async function getConfiguration(): Promise<SpotifyControllerConfig> {
  */
 export async function storeConfiguration(config: SpotifyControllerConfig) {
   const configPath = path.join(process.cwd(), "config.json");
-  await fs.writeFile(configPath, JSON.stringify(config), "utf-8");
+  await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
 }

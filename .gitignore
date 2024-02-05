@@ -37,3 +37,6 @@ next-env.d.ts
 
 # Environment
 .env
+
+# Configuration
+config.json
