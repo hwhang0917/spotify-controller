@@ -7,6 +7,8 @@ interface LocalePerLang {
     requirementsTitle: string;
     requirements: string[];
     loginButton: string;
+    unauthorized: string;
+    gobackButton: string;
   };
   adminSettings: {
     title: string;

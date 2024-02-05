@@ -33,3 +33,5 @@ export const DEFAULT_LOCALE = "en_US";
 export const SPOTIFY_ACCESS_TOKEN = "SPOTIFY_ACCESS_TOKEN";
 /* Spotify Refresh Token Key */
 export const SPOTIFY_REFRESH_TOKEN = "SPOTIFY_REFRESH_TOKEN";
+/* Spotify State Key for Admin Cookie */
+export const SPOTIFY_STATE = "SPOTIFY_STATE";

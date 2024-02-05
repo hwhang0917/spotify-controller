@@ -1,10 +1,8 @@
 export const dynamic = "force-dynamic";
 
-import ms from "ms";
 import Link from "next/link";
 import Image from "next/image";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { RocketIcon } from "@radix-ui/react-icons";
 import { getMemoryCache } from "@/lib/cache";
 import { generateRandomHash } from "@/lib/random";
@@ -15,8 +13,10 @@ import {
   SPOTIFY_ACCOUNT_URL,
   SPOTIFY_REDIRECT_ENDPOINT,
   SPOTIFY_SCOPE,
+  SPOTIFY_STATE,
 } from "@/constants";
 import Settings from "./settings";
+import Unauthorized from "./unauthorized";
 
 export default async function Home() {
   const config = await getConfiguration();
@@ -29,7 +29,7 @@ export default async function Home() {
     const state = generateRandomHash();
 
     // Store state to cache
-    await memoryCache.set("state", state, ms("15m"));
+    await memoryCache.set("state", state);
     const redirectUri = new URL(
       SPOTIFY_REDIRECT_ENDPOINT,
       `http://localhost:${process.env.PORT}`,
@@ -79,9 +79,11 @@ export default async function Home() {
     );
   } else {
     const cookieStore = cookies();
-    const adminToken = cookieStore.get(SPOTIFY_ACCESS_TOKEN);
-    if (!adminToken) {
-      redirect("/");
+    const adminState = cookieStore.get(SPOTIFY_STATE);
+    const cacheState = await memoryCache.get<string>("state");
+
+    if (!adminState || adminState.value !== cacheState) {
+      return <Unauthorized />;
     } else {
       return <Settings initialConfig={config} />;
     }

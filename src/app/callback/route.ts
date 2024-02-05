@@ -5,11 +5,13 @@ import qs from "qs";
 import { setInterval, clearInterval } from "timers";
 import axios from "axios";
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import {
   SPOTIFY_ACCESS_TOKEN,
   SPOTIFY_ACCOUNT_URL,
   SPOTIFY_REDIRECT_ENDPOINT,
   SPOTIFY_REFRESH_TOKEN,
+  SPOTIFY_STATE,
 } from "@/constants";
 import Logger from "@/lib/logger";
 import { getMemoryCache } from "@/lib/cache";
@@ -20,6 +22,7 @@ export async function GET(request: NextRequest) {
   const logger = new Logger("SpotifyAuthCallback");
   try {
     const memoryCache = await getMemoryCache();
+    const cookieStore = cookies();
 
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get("code");
@@ -61,6 +64,8 @@ export async function GET(request: NextRequest) {
     );
     await memoryCache.set(SPOTIFY_REFRESH_TOKEN, data.refresh_token);
     logger.log("Spotify Tokens have been set in cache");
+    cookieStore.set(SPOTIFY_STATE, state);
+    logger.log("Spotify State has been set in cookie");
 
     // Set a refresh interval to refresh the access token
     refreshInterval = setInterval(async () => {
@@ -85,7 +90,7 @@ export async function GET(request: NextRequest) {
           }),
         });
       await memoryCache.set(SPOTIFY_ACCESS_TOKEN, refreshData.access_token);
-      logger.log("Spotify Access Token has been refreshed");
+      logger.log("Spotify Access Token has been refreshed in cache");
     }, ms("55 minutes"));
 
     return NextResponse.redirect(`http://localhost:${process.env.PORT}/`);

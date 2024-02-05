@@ -9,6 +9,8 @@ export const translation: Locale = {
         "Custom application added to Spotify Developer Dashboard",
       ],
       loginButton: "Login to Spotify",
+      unauthorized: "Unauthorized",
+      gobackButton: "Go Back",
     },
     adminSettings: {
       title: "Settings",
@@ -35,6 +37,8 @@ export const translation: Locale = {
         "스포티파이 개발자 대시보드에 사용자 지정 애플리케이션 추가",
       ],
       loginButton: "스포티파이에 로그인",
+      unauthorized: "관리자만 접근할 수 있습니다.",
+      gobackButton: "홈으로 가기",
     },
     adminSettings: {
       title: "설정",
