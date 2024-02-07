@@ -23,8 +23,7 @@ export const SPOTIFY_REDIRECT_ENDPOINT = "/callback";
 export const PAGE_SIZE = 20;
 
 /** No Album Cover Placeholder Image */
-export const ALBUM_COVER_PLACEHOLDER =
-  "https://via.placeholder.com/512.png/202020/ffffff?text=No%20Album%20Cover";
+export const ALBUM_COVER_PLACEHOLDER = "https://picsum.photos/id/39/512/512";
 
 /** Default Locale */
 export const DEFAULT_LOCALE = "en_US";
