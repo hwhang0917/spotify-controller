@@ -40,6 +40,7 @@ import {
 import { useMutation } from "react-query";
 import axios from "axios";
 import { useToast } from "@/components/ui/use-toast";
+import Link from "next/link";
 
 interface SettingsProps {
   initialConfig: SpotifyControllerConfig;
@@ -210,9 +211,11 @@ export default function Settings(props: SettingsProps) {
               <Button className="w-full" type="submit">
                 {t.saveButton}
               </Button>
-              <Button variant="destructive" className="w-full" type="button">
-                {t.exitButton}
-              </Button>
+              <Link href="/">
+                <Button variant="destructive" className="w-full" type="button">
+                  {t.exitButton}
+                </Button>
+              </Link>
             </CardFooter>
           </Card>
         </form>
