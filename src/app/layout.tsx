@@ -7,6 +7,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { SettingsButton } from "@/components/settings-button";
 import { cn } from "@/lib/utils";
 import "./globals.css";
+import { Toaster } from "@/components/ui/toaster";
 
 const notoSansKR = Noto_Sans_KR({
   subsets: ["latin"],
@@ -51,6 +52,7 @@ export default function RootLayout({
               <ModeToggle />
             </nav>
             {children}
+            <Toaster />
           </QueryProvider>
         </ThemeProvider>
       </body>

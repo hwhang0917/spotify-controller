@@ -1,8 +1,6 @@
 "use client";
 
 import React from "react";
-import dayjs from "dayjs";
-import duration from "dayjs/plugin/duration";
 import { useQuery } from "react-query";
 import axios from "axios";
 import Image from "next/image";
@@ -23,14 +21,14 @@ import {
 } from "./ui/collapsible";
 import { ChevronUpIcon, ChevronDownIcon } from "@radix-ui/react-icons";
 import { Button } from "./ui/button";
-dayjs.extend(duration);
+import { getDuration } from "@/lib/time";
 
-interface IPlaylistProps {
+interface PlaylistProps {
   accessToken: string;
   language: Language;
 }
 
-export function Playlist(props: IPlaylistProps) {
+export function Playlist(props: PlaylistProps) {
   const [open, setOpen] = React.useState(false);
 
   const { data: playerQueue } = useQuery(
@@ -48,10 +46,6 @@ export function Playlist(props: IPlaylistProps) {
       return data;
     },
   );
-
-  const getDuration = (ms: number) => {
-    return dayjs(ms).format("mm:ss");
-  };
 
   return (
     <Card>
@@ -91,14 +85,14 @@ export function Playlist(props: IPlaylistProps) {
               {playerQueue?.queue.map((item, index) => (
                 <TableRow key={item.id}>
                   <TableCell>{index + 1}</TableCell>
-                  <TableHead>
+                  <TableCell>
                     <Image
                       src={item.album.images[0].url}
                       alt={item.album.name}
                       width={50}
                       height={50}
                     />
-                  </TableHead>
+                  </TableCell>
                   <TableCell>{item.name}</TableCell>
                   <TableCell>{item.artists[0].name}</TableCell>
                   <TableCell>{getDuration(item.duration_ms)}</TableCell>
