@@ -16,7 +16,7 @@ import {
 import Logger from "@/lib/logger";
 import { getMemoryCache } from "@/lib/cache";
 
-export let refreshInterval: NodeJS.Timeout | null = null;
+let refreshInterval: NodeJS.Timeout | null = null;
 
 export async function GET(request: NextRequest) {
   const logger = new Logger("SpotifyAuthCallback");
