@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  ALBUM_COVER_PLACEHOLDER,
-  SPOTIFY_ACCESS_TOKEN,
-  SPOTIFY_API_URL,
-} from "@/constants";
+import { SPOTIFY_ACCESS_TOKEN, SPOTIFY_API_URL } from "@/constants";
 import axios from "axios";
 import { useMutation, useQuery } from "react-query";
 import {
@@ -16,10 +12,10 @@ import {
 } from "./ui/card";
 import Image from "next/image";
 import { Skeleton } from "./ui/skeleton";
-import { getListFormatter } from "@/lib/string";
 import { Pause, Play, SkipForward } from "lucide-react";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
+import { Playlist } from "./playlist";
 
 export default function Player() {
   // Get configuration and access token
@@ -95,7 +91,7 @@ export default function Player() {
   const title = currentlyPlayingTrack?.item?.name;
 
   return (
-    <main className="container grid min-h-screen place-items-center">
+    <main className="container my-4 space-y-4">
       <Card className="min-w-[300px]">
         <CardHeader>
           <CardTitle>
@@ -171,6 +167,12 @@ export default function Player() {
           </div>
         </CardContent>
       </Card>
+      {configCache?.config.allowViewing && (
+        <Playlist
+          accessToken={accessToken || ""}
+          language={language || "korean"}
+        />
+      )}
     </main>
   );
 }

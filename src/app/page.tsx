@@ -15,8 +15,9 @@ export default async function Home() {
     await memoryCache.get<string>(SPOTIFY_ACCESS_TOKEN);
   const isAppInitialized = !!accessTokenFromCache;
   const adminSpotifyState = cookieStore.get(SPOTIFY_STATE)?.value;
+  const isEnvDev = process.env.NODE_ENV === "development";
 
-  if (!isAppInitialized) {
+  if (!isEnvDev && !isAppInitialized) {
     redirect("/admin");
   }
 
