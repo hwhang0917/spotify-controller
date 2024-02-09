@@ -152,12 +152,7 @@ export default function Player() {
                 {currentlyPlayingTrack?.is_playing ? (
                   <Button
                     variant="outline"
-                    className={cn(
-                      "w-full",
-                      configCache?.config.allowPausing
-                        ? "cursor-pointer"
-                        : "cursor-not-allowed",
-                    )}
+                    className="w-full cursor-pointer disabled:cursor-not-allowed"
                     onClick={() => pauseTrack()}
                     disabled={!configCache?.config.allowPausing}
                   >
@@ -166,12 +161,7 @@ export default function Player() {
                 ) : (
                   <Button
                     variant="outline"
-                    className={cn(
-                      "w-full",
-                      configCache?.config.allowPausing
-                        ? "cursor-pointer"
-                        : "cursor-not-allowed",
-                    )}
+                    className="w-full cursor-pointer disabled:cursor-not-allowed"
                     onClick={() => playTrack()}
                     disabled={!configCache?.config.allowPausing}
                   >

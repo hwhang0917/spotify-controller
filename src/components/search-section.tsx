@@ -223,9 +223,8 @@ export function SearchSection(props: SearchSectionProps) {
                     </TableRow>
                   ))
                 : searchResults?.tracks.items.map((item, index) => (
-                    <AlertDialogTrigger asChild>
+                    <AlertDialogTrigger key={item.id} asChild>
                       <TableRow
-                        key={item.id}
                         className="cursor-pointer"
                         onClick={() => {
                           setSongId(item.uri);
