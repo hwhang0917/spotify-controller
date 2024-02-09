@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+<p align="center">
+   <img src="public/icon.png" width="200px"/>
+</p>
 
-## Getting Started
+# Spotify Controller
 
-First, run the development server:
+> Web based Spotify playlist controller
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+[![Author](https://img.shields.io/badge/author-RunFridge-green?style=flat)](https://github.com/hwhang0917)
+[![License](https://img.shields.io/github/license/RunFridge/film-book)](https://github.com/hwhang0917/spotify-bot/blob/master/LICENSE)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Translations
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- [한국어](docs/README_ko.md)
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+## Requirements
 
-## Learn More
+- Node.js ^20.11.0
+- Spotify Premium Account
+- GUI Browser
 
-To learn more about Next.js, take a look at the following resources:
+## Setup Guide
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Clone this repository to your local machine.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+2. Install dependencies using `yarn`.
 
-## Deploy on Vercel
+3. Go to your [Spotify Dashboard](https://developer.spotify.com/dashboard/applications) and create a new application for this bot.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+4. Add `http://localhost:3000/callback` to Redirect URI.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+5. Copy both the Client ID and Client Secret from your newly created Spotify application.
+
+6. Copy `.env.sample` as `.env` to the root directory of this project.
+
+7. Fill in contents on the `.env` as it is guided.
+
+8. Run server using `yarn deploy`.
+
+9. Follow the instructions when browser opens
+
+10. Get your internal private IP address and share `http://${privateIP}:3000` or expose port `3000` to others
