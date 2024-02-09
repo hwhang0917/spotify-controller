@@ -15,7 +15,7 @@
 
 ## Requirements
 
-- Node.js ^16.17.0
+- Node.js ^20.11.0
 - Spotify Premium Account
 - GUI Browser
 
@@ -27,7 +27,7 @@
 
 3. Go to your [Spotify Dashboard](https://developer.spotify.com/dashboard/applications) and create a new application for this bot.
 
-4. Add `http://localhost:5555/callback` to Redirect URI.
+4. Add `http://localhost:3000/callback` to Redirect URI.
 
 5. Copy both the Client ID and Client Secret from your newly created Spotify application.
 
@@ -35,8 +35,8 @@
 
 7. Fill in contents on the `.env` as it is guided.
 
-8. Run server using `yarn start`.
+8. Run server using `yarn deploy`.
 
 9. Follow the instructions when browser opens
 
-10. Get your internal private IP address and share `http://${privateIP}:5050` or expose port `5050` to others
+10. Get your internal private IP address and share `http://${privateIP}:3000` or expose port `3000` to others
