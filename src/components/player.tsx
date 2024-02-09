@@ -14,8 +14,9 @@ import Image from "next/image";
 import { Skeleton } from "./ui/skeleton";
 import { Pause, Play, SkipForward } from "lucide-react";
 import { Button } from "./ui/button";
-import { cn } from "@/lib/utils";
 import { Playlist } from "./playlist";
+import { ReloadButton } from "./reload-button";
+import { cn } from "@/lib/utils";
 
 export default function Player() {
   // Get configuration and access token
@@ -94,8 +95,9 @@ export default function Player() {
     <main className="container my-4 space-y-4">
       <Card className="min-w-[300px]">
         <CardHeader>
-          <CardTitle>
+          <CardTitle className="flex items-center justify-between">
             {language === "korean" ? "현재 재생 중" : "Currently Playing Track"}
+            <ReloadButton />
           </CardTitle>
           <CardDescription></CardDescription>
         </CardHeader>
@@ -110,7 +112,7 @@ export default function Player() {
                 className="mx-auto rounded-md"
               />
             ) : (
-              <Skeleton className="h-[300px] w-[300px] rounded-md" />
+              <Skeleton className="mx-auto h-[300px] w-[300px] rounded-md" />
             )}
           </div>
           <div className="mt-4">
