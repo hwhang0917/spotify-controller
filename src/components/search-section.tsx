@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useEffect } from "react";
 import axios from "axios";
 import { useMutation, useQuery } from "react-query";
 import { SPOTIFY_API_URL } from "@/constants";
@@ -61,6 +61,11 @@ export function SearchSection(props: SearchSectionProps) {
   const [title, setTitle] = React.useState("");
   const { toast } = useToast();
 
+  // Reset pagination when search query changes
+  useEffect(() => {
+    setPagination({ limit: 10, offset: 0 });
+  }, [deferredSearchQuery]);
+
   const { data: searchResults, isLoading } = useQuery(
     [
       "searchResults",
@@ -119,6 +124,7 @@ export function SearchSection(props: SearchSectionProps) {
               : "Song added to playlist",
         });
         setSearchQuery("");
+        setPagination({ limit: 10, offset: 0 });
       },
     },
   );
@@ -199,6 +205,11 @@ export function SearchSection(props: SearchSectionProps) {
                 <TableHead>
                   {props.language === "korean" ? "재생시간" : "Duration"}
                 </TableHead>
+                <TableHead>
+                  {props.language === "korean"
+                    ? "플레이리스트 추가"
+                    : "Add to Playlist"}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -223,28 +234,34 @@ export function SearchSection(props: SearchSectionProps) {
                     </TableRow>
                   ))
                 : searchResults?.tracks.items.map((item, index) => (
-                    <AlertDialogTrigger key={item.id} asChild>
-                      <TableRow
-                        className="cursor-pointer"
-                        onClick={() => {
-                          setSongId(item.uri);
-                          setTitle(item.name);
-                        }}
-                      >
-                        <TableCell>{index + 1 + pagination.offset}</TableCell>
-                        <TableCell>
-                          <Image
-                            src={item.album.images[0].url}
-                            alt={item.album.name}
-                            width={50}
-                            height={50}
-                          />
-                        </TableCell>
-                        <TableCell>{item.name}</TableCell>
-                        <TableCell>{item.artists[0].name}</TableCell>
-                        <TableCell>{getDuration(item.duration_ms)}</TableCell>
-                      </TableRow>
-                    </AlertDialogTrigger>
+                    <TableRow
+                      key={item.id}
+                      className="cursor-pointer"
+                      onClick={() => {
+                        setSongId(item.uri);
+                        setTitle(item.name);
+                      }}
+                    >
+                      <TableCell>{index + 1 + pagination.offset}</TableCell>
+                      <TableCell>
+                        <Image
+                          src={item.album.images[0].url}
+                          alt={item.album.name}
+                          width={50}
+                          height={50}
+                        />
+                      </TableCell>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>{item.artists[0].name}</TableCell>
+                      <TableCell>{getDuration(item.duration_ms)}</TableCell>
+                      <TableCell>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" className="w-full">
+                            추가
+                          </Button>
+                        </AlertDialogTrigger>
+                      </TableCell>
+                    </TableRow>
                   )) || (
                     <CardDescription className="my-5 text-center">
                       {props.language === "korean"
