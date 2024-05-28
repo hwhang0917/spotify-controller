@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --turbo",
     "build": "next build",
-    "start": "next start",
+    "start": "./scripts/get-addr.sh && next start -p 5555",
     "lint": "next lint",
     "format": "prettier --write \"src/**/*.{js,ts,jsx,tsx}\"",
     "deploy": "yarn build && yarn start"
