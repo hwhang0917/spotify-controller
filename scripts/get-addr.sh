@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 
+REQUIRED_COMMANDS="grep awk"
+
+# Check for required commands
+for cmd in $REQUIRED_COMMANDS; do
+    if ! command -v $cmd &> /dev/null; then
+        echo "$cmd is required to run this script"
+        exit 1
+    fi
+done
+
+IP_REGEXP="inet (addr:)?([0-9]*\.){3}[0-9]*"
+AWK_CMD='{ print "http://"$2":5555" }'
 SPOTIFY=$(cat << 'EOF'
         ⠀⠀⠀⠀⠀⠀⠀⢀⣠⣤⣤⣶⣶⣶⣶⣤⣤⣄⡀⠀⠀⠀⠀⠀⠀⠀
         ⠀⠀⠀⠀⢀⣤⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣤⡀⠀⠀⠀⠀
@@ -14,17 +26,18 @@ SPOTIFY=$(cat << 'EOF'
         ⠀⠀⠀⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠀⠀⠀
         ⠀⠀⠀⠀⠈⠛⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠛⠁⠀⠀⠀⠀
         ⠀⠀⠀⠀⠀⠀⠀⠈⠙⠛⠛⠿⠿⠿⠿⠛⠛⠋⠁⠀⠀⠀⠀⠀⠀⠀
-EOF)
+EOF
+)
 
 OUTPUT=""
-LINE_BREAK="    ===============================    "
+LINE_BREAK="    ===========================    "
 
-# Check if the os is MacOS
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    OUTPUT=$(ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1' | awk '{ print "http://"$2":5555" }')
-# Check if the os is Linux
-elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    OUTPUT=$(ip addr | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep 192 | awk '{ print "http://"$2":5555" }')
+# Run ifconfig
+if command -v ifconfig &> /dev/null; then
+    OUTPUT=$(ifconfig | grep -Eo "$IP_REGEXP" | grep -v '127.0.0.1' | awk "$AWK_CMD")
+# Run ip addr
+elif command -v ip &> /dev/null; then
+    OUTPUT=$(ip addr | grep -Eo "$IP_REGEXP" | grep -v '127.0.0.1' | awk "$AWK_CMD")
 fi
 
 # Print OUTPUT in the terminal as pink
