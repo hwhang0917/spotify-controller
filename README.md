@@ -138,6 +138,9 @@ make lint        # gofmt + go vet
 
 ## Build
 
+Every push runs `.github/workflows/ci.yml`: both UIs build, `make lint`,
+`make test`, and a Windows `.exe` is attached to the run as an artifact.
+
 ```sh
 make build           # this machine: both UIs embedded, output in build/bin/
 make build-windows   # CGO-free Windows .exe from any OS
