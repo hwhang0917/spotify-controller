@@ -69,3 +69,11 @@ export function fmtDuration(ns: number): string {
   const s = Math.round(ns / NS_PER_SEC)
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
+
+export interface GuestInfo {
+  id: string
+  name: string
+  connections: number
+  blocked: boolean
+  lastSeen: string
+}

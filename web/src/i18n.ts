@@ -1,0 +1,67 @@
+import { ref } from 'vue'
+import { detectLocale, format, saveLocale, type Locale, type Messages } from '../../ui/i18n'
+
+const messages: Messages = {
+  en: {
+    'gate.title': 'What should we call you?',
+    'gate.placeholder': 'Your name',
+    'gate.join': 'Join',
+    'header.hi': 'Hi, {name}',
+    'header.here': '{n} here',
+    'now.eyebrow': 'now playing',
+    'now.empty': 'Nothing playing. Request something below.',
+    'now.requestedBy': 'requested by {name}',
+    'now.paused': 'paused',
+    'now.skip': 'Vote to skip · {v}/{t}',
+    'search.eyebrow': 'request a song',
+    'search.placeholder': 'Search title, artist, album',
+    'search.request': 'Request',
+    'search.empty': 'No results.',
+    'queue.eyebrow': 'up next · {n}',
+    'queue.empty': 'Queue is empty.',
+    'spotify.listen': 'Listen on Spotify',
+    'spotify.footer': "Music plays on the host's Spotify account. Content provided by Spotify.",
+    'blocked.title': 'You have been blocked by the host.',
+    'blocked.body': 'Ask the person running vibe-music if you think this is a mistake.',
+    'err.name_required': 'Set a display name first.',
+    'err.name_invalid': 'Name must be 1–24 characters.',
+    'err.not_in_queue': 'That song is no longer in the queue.',
+    'err.track_required': 'Pick a song first.',
+    'err.player_not_running': 'The host has not started the player.',
+    'err.no active source': 'No music source is active on the host.',
+  },
+  ko: {
+    'gate.title': '이름을 알려주세요',
+    'gate.placeholder': '이름',
+    'gate.join': '참여하기',
+    'header.hi': '{name}님, 안녕하세요',
+    'header.here': '{n}명 접속 중',
+    'now.eyebrow': '지금 재생 중',
+    'now.empty': '재생 중인 곡이 없어요. 아래에서 신청해 주세요.',
+    'now.requestedBy': '{name} 신청',
+    'now.paused': '일시정지',
+    'now.skip': '건너뛰기 투표 · {v}/{t}',
+    'search.eyebrow': '노래 신청',
+    'search.placeholder': '제목, 아티스트, 앨범 검색',
+    'search.request': '신청',
+    'search.empty': '검색 결과가 없어요.',
+    'queue.eyebrow': '다음 곡 · {n}',
+    'queue.empty': '대기열이 비어 있어요.',
+    'spotify.listen': 'Spotify에서 듣기',
+    'spotify.footer': '음악은 호스트의 Spotify 계정으로 재생됩니다. 콘텐츠 제공: Spotify',
+    'blocked.title': '호스트가 접근을 차단했어요.',
+    'blocked.body': '오류라고 생각되면 vibe-music을 운영하는 분에게 문의해 주세요.',
+    'err.name_required': '먼저 이름을 입력해 주세요.',
+    'err.name_invalid': '이름은 1~24자여야 해요.',
+    'err.not_in_queue': '이미 대기열에서 사라진 곡이에요.',
+    'err.track_required': '먼저 곡을 선택해 주세요.',
+    'err.player_not_running': '호스트가 아직 플레이어를 시작하지 않았어요.',
+    'err.no active source': '호스트에 활성화된 음악 소스가 없어요.',
+  },
+}
+
+export const locale = ref<Locale>(detectLocale())
+export function setLocale(l: Locale) { locale.value = l; saveLocale(l) }
+export const t = (key: string, vars?: Record<string, string | number>) => format(messages, locale.value, key, vars)
+// Server error codes map to err.* keys; unknown text passes through.
+export const tError = (code: string) => (messages.en[`err.${code}`] ? t(`err.${code}`) : code)

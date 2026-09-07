@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import SpotifyMark from './SpotifyMark.vue'
+import LocaleToggle from './LocaleToggle.vue'
+import { t, tError } from './i18n'
 import type { State, Track } from './types'
 import { fmtDuration, NS_PER_MS } from './types'
 
@@ -15,6 +17,11 @@ const searching = ref(false)
 const error = ref('')
 const now = ref(Date.now())
 const connected = ref(false)
+const blocked = ref(false)
+
+class ApiError extends Error {
+  constructor(public code: string, public status: number) { super(code) }
+}
 
 async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -23,7 +30,7 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.error ?? res.statusText)
+  if (!res.ok) throw new ApiError(data.error ?? res.statusText, res.status)
   return data as T
 }
 
@@ -32,7 +39,8 @@ async function act(fn: () => Promise<unknown>) {
   try {
     await fn()
   } catch (e) {
-    error.value = (e as Error).message
+    if (e instanceof ApiError && e.code === 'blocked') { blocked.value = true; return }
+    error.value = tError((e as Error).message)
   }
 }
 
@@ -53,8 +61,8 @@ function onQuery() {
   }), SEARCH_DEBOUNCE_MS)
 }
 
-const request = (t: Track) => act(async () => {
-  await api('POST', '/api/queue', t)
+const request = (tr: Track) => act(async () => {
+  await api('POST', '/api/queue', tr)
   query.value = ''
   results.value = []
 })
@@ -77,25 +85,44 @@ const isSpotify = computed(() => state.value?.source?.id === 'spotify')
 let es: EventSource | null = null
 let tick: number | undefined
 onMounted(async () => {
-  const me = await api<{ name: string }>('GET', '/api/me')
-  name.value = me.name
+  await act(async () => {
+    const me = await api<{ name: string }>('GET', '/api/me')
+    name.value = me.name
+  })
+  if (blocked.value) return
   es = new EventSource('/api/events')
   es.addEventListener('state', (e) => { state.value = JSON.parse((e as MessageEvent).data) })
   es.onopen = () => { connected.value = true }
-  es.onerror = () => { connected.value = false }
+  es.onerror = () => {
+    connected.value = false
+    // A kick just reconnects; a block shows up as 403 on the next probe.
+    act(() => api('GET', '/api/me'))
+  }
   tick = window.setInterval(() => { now.value = Date.now() }, 1000)
 })
 onUnmounted(() => { es?.close(); window.clearInterval(tick) })
 </script>
 
 <template>
-  <!-- name gate -->
-  <main v-if="!name" class="min-h-screen flex items-center justify-center p-6">
-    <form class="card w-full max-w-sm space-y-4" @submit.prevent="saveName">
+  <!-- blocked -->
+  <main v-if="blocked" class="min-h-screen flex items-center justify-center p-6">
+    <section class="card w-full max-w-sm space-y-3">
       <p class="eyebrow">vibe-music</p>
-      <h1 class="text-2xl font-semibold tracking-tight">What should we call you?</h1>
-      <input v-model="nameInput" class="input" placeholder="Your name" maxlength="24" autofocus />
-      <button class="btn-primary w-full" :disabled="!nameInput.trim()">Join</button>
+      <h1 class="text-xl font-semibold tracking-tight">{{ t('blocked.title') }}</h1>
+      <p class="text-sm text-body">{{ t('blocked.body') }}</p>
+    </section>
+  </main>
+
+  <!-- name gate -->
+  <main v-else-if="!name" class="min-h-screen flex items-center justify-center p-6">
+    <form class="card w-full max-w-sm space-y-4" @submit.prevent="saveName">
+      <div class="flex items-center justify-between">
+        <p class="eyebrow">vibe-music</p>
+        <LocaleToggle />
+      </div>
+      <h1 class="text-2xl font-semibold tracking-tight">{{ t('gate.title') }}</h1>
+      <input v-model="nameInput" class="input" :placeholder="t('gate.placeholder')" maxlength="24" autofocus />
+      <button class="btn-primary w-full" :disabled="!nameInput.trim()">{{ t('gate.join') }}</button>
       <p v-if="error" class="text-sm text-error">{{ error }}</p>
     </form>
   </main>
@@ -104,18 +131,18 @@ onUnmounted(() => { es?.close(); window.clearInterval(tick) })
     <header class="flex items-center justify-between">
       <div>
         <p class="eyebrow">vibe-music</p>
-        <h1 class="text-xl font-semibold tracking-tight">Hi, {{ name }}</h1>
+        <h1 class="text-xl font-semibold tracking-tight">{{ t('header.hi', { name }) }}</h1>
       </div>
-      <p class="text-xs text-mute">
-        <span :class="connected ? 'text-link' : 'text-error'">●</span>
-        {{ state?.guests ?? 0 }} here
-      </p>
+      <div class="flex items-center gap-4 text-xs text-mute">
+        <span><span :class="connected ? 'text-link' : 'text-error'">●</span> {{ t('header.here', { n: state?.guests ?? 0 }) }}</span>
+        <LocaleToggle />
+      </div>
     </header>
     <p v-if="error" class="text-sm text-error">{{ error }}</p>
 
     <!-- now playing -->
     <section class="card space-y-4">
-      <p class="eyebrow">now playing<span v-if="state?.source"> · {{ state.source.name }}</span></p>
+      <p class="eyebrow">{{ t('now.eyebrow') }}<span v-if="state?.source"> · {{ state.source.name }}</span></p>
       <div v-if="state?.nowPlaying" class="space-y-4">
         <div class="flex gap-4">
           <img v-if="state.nowPlaying.track.artworkUrl" :src="state.nowPlaying.track.artworkUrl" class="w-24 h-24 rounded-sm object-cover shrink-0" alt="" />
@@ -123,7 +150,7 @@ onUnmounted(() => { es?.close(); window.clearInterval(tick) })
           <div class="min-w-0 flex-1">
             <p class="text-lg font-semibold tracking-tight truncate">{{ state.nowPlaying.track.title }}</p>
             <p class="text-sm text-body truncate">{{ state.nowPlaying.track.artist || '—' }}</p>
-            <p v-if="state.nowPlaying.requestedBy" class="text-xs text-mute mt-1">requested by {{ state.nowPlaying.requestedBy }}</p>
+            <p v-if="state.nowPlaying.requestedBy" class="text-xs text-mute mt-1">{{ t('now.requestedBy', { name: state.nowPlaying.requestedBy }) }}</p>
             <SpotifyMark v-if="state.nowPlaying.track.externalUrl" :href="state.nowPlaying.track.externalUrl" class="mt-2" />
           </div>
         </div>
@@ -133,39 +160,39 @@ onUnmounted(() => { es?.close(); window.clearInterval(tick) })
           </div>
           <div class="flex justify-between font-mono text-xs text-mute mt-1">
             <span>{{ fmtDuration(position * NS_PER_MS) }}</span>
-            <span>{{ state.nowPlaying.playing ? '' : 'paused · ' }}{{ fmtDuration(state.nowPlaying.track.duration) }}</span>
+            <span>{{ state.nowPlaying.playing ? '' : t('now.paused') + ' · ' }}{{ fmtDuration(state.nowPlaying.track.duration) }}</span>
           </div>
         </div>
         <button class="btn-ghost w-full" @click="voteSkip">
-          Vote to skip · {{ state.skipVotes }}/{{ state.skipThreshold }}
+          {{ t('now.skip', { v: state.skipVotes, t: state.skipThreshold }) }}
         </button>
       </div>
-      <p v-else class="text-sm text-mute">Nothing playing. Request something below.</p>
+      <p v-else class="text-sm text-mute">{{ t('now.empty') }}</p>
     </section>
 
     <!-- search -->
     <section class="card space-y-3">
-      <p class="eyebrow">request a song</p>
-      <input v-model="query" class="input" placeholder="Search title, artist, album" @input="onQuery" />
+      <p class="eyebrow">{{ t('search.eyebrow') }}</p>
+      <input v-model="query" class="input" :placeholder="t('search.placeholder')" @input="onQuery" />
       <ul v-if="results.length" class="divide-y divide-hairline">
-        <li v-for="t in results" :key="t.id" class="py-2 flex items-center gap-3">
-          <img v-if="t.artworkUrl" :src="t.artworkUrl" class="w-10 h-10 rounded-sm object-cover shrink-0" alt="" />
+        <li v-for="tr in results" :key="tr.id" class="py-2 flex items-center gap-3">
+          <img v-if="tr.artworkUrl" :src="tr.artworkUrl" class="w-10 h-10 rounded-sm object-cover shrink-0" alt="" />
           <div v-else class="w-10 h-10 rounded-sm bg-hairline-soft shrink-0" />
           <div class="min-w-0 flex-1">
-            <p class="text-sm font-medium truncate">{{ t.title }}</p>
-            <p class="text-xs text-body truncate">{{ t.artist }}<span v-if="t.album"> · {{ t.album }}</span></p>
-            <SpotifyMark v-if="t.externalUrl" :href="t.externalUrl" />
+            <p class="text-sm font-medium truncate">{{ tr.title }}</p>
+            <p class="text-xs text-body truncate">{{ tr.artist }}<span v-if="tr.album"> · {{ tr.album }}</span></p>
+            <SpotifyMark v-if="tr.externalUrl" :href="tr.externalUrl" />
           </div>
-          <span class="font-mono text-xs text-mute">{{ fmtDuration(t.duration) }}</span>
-          <button class="btn-primary" @click="request(t)">Request</button>
+          <span class="font-mono text-xs text-mute">{{ fmtDuration(tr.duration) }}</span>
+          <button class="btn-primary" @click="request(tr)">{{ t('search.request') }}</button>
         </li>
       </ul>
-      <p v-else-if="query && !searching" class="text-sm text-mute">No results.</p>
+      <p v-else-if="query && !searching" class="text-sm text-mute">{{ t('search.empty') }}</p>
     </section>
 
     <!-- queue -->
     <section class="card space-y-3">
-      <p class="eyebrow">up next · {{ state?.queue.length ?? 0 }}</p>
+      <p class="eyebrow">{{ t('queue.eyebrow', { n: state?.queue.length ?? 0 }) }}</p>
       <ol v-if="state?.queue.length" class="divide-y divide-hairline">
         <li v-for="(it, i) in state.queue" :key="it.id" class="py-2 flex items-center gap-3">
           <span class="font-mono text-xs text-mute w-5">{{ i + 1 }}</span>
@@ -177,11 +204,9 @@ onUnmounted(() => { es?.close(); window.clearInterval(tick) })
           <button class="btn-ghost font-mono" @click="vote(it.id)">▲ {{ it.votes }}</button>
         </li>
       </ol>
-      <p v-else class="text-sm text-mute">Queue is empty.</p>
+      <p v-else class="text-sm text-mute">{{ t('queue.empty') }}</p>
     </section>
 
-    <footer v-if="isSpotify" class="text-xs text-mute text-center pb-4">
-      Music plays on the host's Spotify account. Content provided by Spotify.
-    </footer>
+    <footer v-if="isSpotify" class="text-xs text-mute text-center pb-4">{{ t('spotify.footer') }}</footer>
   </main>
 </template>
