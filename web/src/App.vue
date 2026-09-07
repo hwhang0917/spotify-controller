@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { goDeps, uiDeps } from '../../ui/attributions'
+import { goDeps, repoURL, uiDeps } from '../../ui/attributions'
+import GitHubIcon from './GitHubIcon.vue'
 import { Skeleton } from '@/components/ui/skeleton'
 import NowPlaying from './NowPlaying.vue'
 import TrackRow from './TrackRow.vue'
@@ -391,6 +392,9 @@ onUnmounted(() => { es?.close(); window.clearInterval(health); window.clearInter
             <DialogTitle>{{ t('about.title') }}</DialogTitle>
             <DialogDescription class="break-keep">{{ t('about.desc') }}</DialogDescription>
           </DialogHeader>
+          <Button variant="outline" class="w-full" as-child>
+            <a :href="repoURL" target="_blank" rel="noopener"><GitHubIcon />{{ t('about.github') }}</a>
+          </Button>
           <div v-for="[label, deps] in [['about.go', goDeps], ['about.ui', uiDeps]] as const" :key="label" class="space-y-2">
             <p class="eyebrow">{{ t(label) }}</p>
             <ul class="divide-y rounded-md border text-left">

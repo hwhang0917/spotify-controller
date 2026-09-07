@@ -2,6 +2,8 @@
 // pulls in its own, licensed under the same or compatible terms.
 export type Attribution = { name: string; license: string; url: string }
 
+export const repoURL = 'https://github.com/hwhang0917/vibe-music'
+
 export const goDeps: Attribution[] = [
   { name: 'Go', license: 'BSD-3-Clause', url: 'https://go.dev' },
   { name: 'Wails', license: 'MIT', url: 'https://github.com/wailsapp/wails' },

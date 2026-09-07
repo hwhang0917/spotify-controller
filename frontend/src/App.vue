@@ -22,7 +22,8 @@ import YouTubePlayer from './YouTubePlayer.vue'
 import YouTubeIcon from './YouTubeIcon.vue'
 import HelpTip from './HelpTip.vue'
 import GuideDialog from './GuideDialog.vue'
-import { goDeps, uiDeps } from '../../ui/attributions'
+import { goDeps, repoURL, uiDeps } from '../../ui/attributions'
+import GitHubIcon from './GitHubIcon.vue'
 import { BrowserOpenURL } from '../wailsjs/runtime/runtime'
 import SourceIcon from './SourceIcon.vue'
 import Wave from './Wave.vue'
@@ -701,6 +702,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                 </div>
               </div>
             </div>
+            <Button variant="outline" class="w-full" @click="BrowserOpenURL(repoURL)"><GitHubIcon />{{ t('about.github') }}</Button>
           </DialogContent>
         </Dialog>
         <span aria-hidden="true">·</span>
