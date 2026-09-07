@@ -260,6 +260,19 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
 <template>
   <TooltipProvider>
     <Toaster position="bottom-right" rich-colors close-button />
+    <!-- shared confirmation; kept outside the tabs because an inactive tab's content is unmounted -->
+    <AlertDialog :open="!!confirm" @update:open="(o: boolean) => { if (!o) confirm = null }">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ confirm?.title }}</AlertDialogTitle>
+          <AlertDialogDescription>{{ confirm?.body }}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{{ t('source.cancel') }}</AlertDialogCancel>
+          <AlertDialogAction class="bg-destructive text-white hover:bg-destructive/90" @click="confirmNow">{{ t('confirm.remove') }}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <main class="mx-auto flex min-h-screen max-w-7xl flex-col gap-4 p-4 lg:h-screen lg:overflow-hidden lg:p-6">
       <header class="flex shrink-0 items-center justify-between">
         <div>
@@ -500,18 +513,6 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
               </li>
             </ul>
 
-            <AlertDialog :open="!!confirm" @update:open="(o: boolean) => { if (!o) confirm = null }">
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>{{ confirm?.title }}</AlertDialogTitle>
-                  <AlertDialogDescription>{{ confirm?.body }}</AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>{{ t('source.cancel') }}</AlertDialogCancel>
-                  <AlertDialogAction class="bg-destructive text-white hover:bg-destructive/90" @click="confirmNow">{{ t('confirm.remove') }}</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
 
             <AlertDialog :open="!!pending" @update:open="(o: boolean) => { if (!o) pending = null }">
               <AlertDialogContent>
