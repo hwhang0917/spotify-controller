@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/hwhang0917/vibe-music/internal/source"
 	"time"
 )
 
@@ -56,6 +58,9 @@ func TestScanAndSearch(t *testing.T) {
 	}
 	if all[0].Duration == 0 || all[0].Duration > 2*time.Second {
 		t.Fatalf("duration should come from the scan: %v", all[0].Duration)
+	}
+	if all[0].ArtistID != "" { // WAV has no tags: nothing to link
+		t.Fatalf("tagless file should have no artist page: %+v", all[0])
 	}
 	hits, _ := s.Search(context.Background(), "SONG", 1)
 	if len(hits) != 1 {
@@ -125,5 +130,35 @@ func TestRescanUsesCacheAndReportsProgress(t *testing.T) {
 	all, _ := s.Search(context.Background(), "", 0)
 	if len(all) != 2 || all[0].Duration == 0 {
 		t.Fatalf("cached index lost data: %+v", all)
+	}
+}
+
+func TestBrowse(t *testing.T) {
+	mk := func(id, title, artist, album string, year int) source.Track {
+		tr := source.Track{ID: id, Source: "local", Title: title, Artist: artist, Album: album, Year: year}
+		browseIDs(&tr)
+		return tr
+	}
+	s := New(nil)
+	s.tracks = []source.Track{
+		mk("1", "Airbag", "Radiohead", "OK Computer", 1997),
+		mk("2", "Idioteque", "radiohead ", "Kid A", 2000), // case/space-insensitive artist
+		mk("3", "Karma Police", "Radiohead", "OK Computer", 1997),
+		mk("4", "Hey", "Pixies", "Doolittle", 1989),
+		mk("5", "untagged", "", "", 0),
+	}
+	if s.tracks[4].ArtistID != "" || s.tracks[4].AlbumID != "" {
+		t.Fatal("no artist tag: no browse keys")
+	}
+	a, err := s.Artist(context.Background(), s.tracks[0].ArtistID)
+	if err != nil || a.Name != "Radiohead" || len(a.Tracks) != 3 || len(a.Albums) != 2 || a.Albums[0].Name != "OK Computer" || a.Albums[1].Year != 2000 {
+		t.Fatalf("artist: %+v %v", a, err)
+	}
+	al, err := s.Album(context.Background(), s.tracks[0].AlbumID)
+	if err != nil || al.Name != "OK Computer" || al.Artist != "Radiohead" || al.Year != 1997 || len(al.Tracks) != 2 || al.ArtistID != a.ID {
+		t.Fatalf("album: %+v %v", al, err)
+	}
+	if _, err := s.Album(context.Background(), "nope"); err != source.ErrNotFound {
+		t.Fatalf("unknown: %v", err)
 	}
 }

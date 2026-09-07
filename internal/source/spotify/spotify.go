@@ -31,6 +31,7 @@ const (
 	httpTimeout     = 15 * time.Second // a dead network must fail, not hang
 	callbackPath    = "/callback"
 	minArtworkPx    = 300
+	browseAlbums    = 20 // albums+singles shown on an artist page
 	trackURIPrefix  = "spotify:track:"
 	externalURLKey  = "spotify"
 	noDeviceMessage = "no Spotify device found: open Spotify on this PC and press play once"
@@ -499,21 +500,87 @@ func mapStatus(cp *spotify.CurrentlyPlaying, current spotify.ID, armed bool) (so
 	return pb, false
 }
 
-func mapTrack(ft *spotify.FullTrack) source.Track {
-	names := make([]string, 0, len(ft.Artists))
-	for _, a := range ft.Artists {
+func mapTrack(ft *spotify.FullTrack) source.Track { return mapSimple(&ft.SimpleTrack, &ft.Album) }
+
+// mapSimple maps a track with the album it belongs to (album tracks from the
+// API carry no album of their own, so the parent's art and year are used).
+func mapSimple(st *spotify.SimpleTrack, al *spotify.SimpleAlbum) source.Track {
+	names := make([]string, 0, len(st.Artists))
+	for _, a := range st.Artists {
 		names = append(names, a.Name)
 	}
-	return source.Track{
+	t := source.Track{
 		Source:      "spotify",
-		ID:          string(ft.ID),
-		Title:       ft.Name,
+		ID:          string(st.ID),
+		Title:       st.Name,
 		Artist:      strings.Join(names, ", "),
-		Album:       ft.Album.Name,
-		Duration:    time.Duration(ft.Duration) * time.Millisecond,
-		ArtworkURL:  pickImage(ft.Album.Images),
-		ExternalURL: ft.ExternalURLs[externalURLKey],
+		Album:       al.Name,
+		Year:        source.YearOf(al.ReleaseDate),
+		Duration:    time.Duration(st.Duration) * time.Millisecond,
+		ArtworkURL:  pickImage(al.Images),
+		ExternalURL: st.ExternalURLs[externalURLKey],
+		AlbumID:     string(al.ID),
 	}
+	if len(st.Artists) > 0 {
+		t.ArtistID = string(st.Artists[0].ID)
+	}
+	return t
+}
+
+func mapAlbum(al *spotify.SimpleAlbum) source.Album {
+	a := source.Album{ID: string(al.ID), Name: al.Name, Year: source.YearOf(al.ReleaseDate), ArtworkURL: pickImage(al.Images)}
+	if len(al.Artists) > 0 {
+		a.Artist, a.ArtistID = al.Artists[0].Name, string(al.Artists[0].ID)
+	}
+	return a
+}
+
+// Artist implements source.Browser: the artist's top tracks and their albums.
+func (s *Source) Artist(ctx context.Context, id string) (source.Artist, error) {
+	c, err := s.getClient()
+	if err != nil {
+		return source.Artist{}, err
+	}
+	ar, err := c.GetArtist(ctx, spotify.ID(id))
+	if err != nil {
+		return source.Artist{}, wrapAPI(err)
+	}
+	// top-tracks takes the market as "country"; from_token works there like in Search
+	top, err := c.GetArtistsTopTracks(ctx, spotify.ID(id), spotify.MarketFromToken)
+	if err != nil {
+		return source.Artist{}, wrapAPI(err)
+	}
+	albums, err := c.GetArtistAlbums(ctx, spotify.ID(id), []spotify.AlbumType{spotify.AlbumTypeAlbum, spotify.AlbumTypeSingle},
+		spotify.Market(spotify.MarketFromToken), spotify.Limit(browseAlbums))
+	if err != nil {
+		return source.Artist{}, wrapAPI(err)
+	}
+	out := source.Artist{ID: id, Name: ar.Name, ArtworkURL: pickImage(ar.Images)}
+	for i := range top {
+		out.Tracks = append(out.Tracks, mapTrack(&top[i]))
+	}
+	for i := range albums.Albums {
+		out.Albums = append(out.Albums, mapAlbum(&albums.Albums[i]))
+	}
+	return out, nil
+}
+
+// Album implements source.Browser. First page of tracks only.
+// ponytail: albums over 50 tracks are cut; page if anyone notices.
+func (s *Source) Album(ctx context.Context, id string) (source.Album, error) {
+	c, err := s.getClient()
+	if err != nil {
+		return source.Album{}, err
+	}
+	fa, err := c.GetAlbum(ctx, spotify.ID(id), spotify.Market(spotify.MarketFromToken))
+	if err != nil {
+		return source.Album{}, wrapAPI(err)
+	}
+	out := mapAlbum(&fa.SimpleAlbum)
+	for i := range fa.Tracks.Tracks {
+		out.Tracks = append(out.Tracks, mapSimple(&fa.Tracks.Tracks[i], &fa.SimpleAlbum))
+	}
+	return out, nil
 }
 
 // pickImage returns the smallest image at least minArtworkPx tall, else the largest.

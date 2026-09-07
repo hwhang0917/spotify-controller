@@ -34,7 +34,7 @@ func TestSearchMapsAndKeepsRanking(t *testing.T) {
 			w.Write([]byte(`{"items":[{"id":{"videoId":"b"}},{"id":{"videoId":"a"}}]}`))
 		case "/videos":
 			w.Write([]byte(`{"items":[
-				{"id":"a","snippet":{"title":"A","channelTitle":"Ch A","thumbnails":{"medium":{"url":"ma"}}},"contentDetails":{"duration":"PT3M"}},
+				{"id":"a","snippet":{"title":"A","channelId":"UC1","channelTitle":"Ch A","publishedAt":"2019-04-01T10:00:00Z","thumbnails":{"medium":{"url":"ma"}}},"contentDetails":{"duration":"PT3M"}},
 				{"id":"b","snippet":{"title":"B","channelTitle":"Ch B","thumbnails":{"default":{"url":"db"}}},"contentDetails":{"duration":"PT2M30S"}}]}`))
 		}
 	}))
@@ -50,6 +50,9 @@ func TestSearchMapsAndKeepsRanking(t *testing.T) {
 	}
 	if got[0].Duration != 150*time.Second || got[0].ArtworkURL != "db" || got[0].ExternalURL != watchURL+"b" || got[0].Artist != "Ch B" {
 		t.Fatalf("mapping: %+v", got[0])
+	}
+	if got[1].ArtistID != "UC1" || got[1].Year != 2019 {
+		t.Fatalf("browse keys: %+v", got[1])
 	}
 	if got[1].ArtworkURL != "ma" {
 		t.Fatalf("prefers medium thumbnail: %+v", got[1])
@@ -225,5 +228,34 @@ func TestChartFollowsNextPage(t *testing.T) {
 	got, err := s.Chart(context.Background(), "KR", 3)
 	if err != nil || calls != 2 || len(got) != 3 || got[2].ID != "c" {
 		t.Fatalf("calls=%d got=%+v err=%v", calls, got, err)
+	}
+}
+
+func TestArtistCachesPerChannel(t *testing.T) {
+	searches := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/search":
+			searches++
+			q := r.URL.Query()
+			if q.Get("channelId") != "UC1" || q.Get("q") != "" || q.Get("order") != "viewCount" || q.Get("videoCategoryId") != "10" {
+				t.Errorf("query: %v", q)
+			}
+			w.Write([]byte(`{"items":[{"id":{"videoId":"v1"}}]}`))
+		case "/videos":
+			w.Write([]byte(`{"items":[{"id":"v1","snippet":{"title":"V","channelId":"UC1","channelTitle":"Ch","thumbnails":{"default":{"url":"d"}}},"contentDetails":{"duration":"PT1M"}}]}`))
+		}
+	}))
+	defer srv.Close()
+	s := New(Options{APIKey: "k", APIURL: srv.URL})
+	a, err := s.Artist(context.Background(), "UC1")
+	if err != nil || a.Name != "Ch" || len(a.Tracks) != 1 || a.Tracks[0].ArtistID != "UC1" {
+		t.Fatalf("artist: %+v %v", a, err)
+	}
+	if _, err := s.Artist(context.Background(), "UC1"); err != nil || searches != 1 {
+		t.Fatalf("second call should be cached: searches=%d err=%v", searches, err)
+	}
+	if _, err := s.Album(context.Background(), "x"); err != source.ErrNotFound {
+		t.Fatalf("no albums on YouTube: %v", err)
 	}
 }

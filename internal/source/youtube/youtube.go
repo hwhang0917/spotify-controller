@@ -88,7 +88,8 @@ type Source struct {
 	played  time.Time
 	volume  int
 
-	charts map[string]chartEntry // region -> cached chart
+	charts   map[string]chartEntry // region -> cached chart
+	channels map[string]chartEntry // artist pages, same TTL as charts
 }
 
 type chartEntry struct {
@@ -97,7 +98,7 @@ type chartEntry struct {
 }
 
 func New(opts Options) *Source {
-	s := &Source{opts: opts, tracks: map[string]source.Track{}, charts: map[string]chartEntry{}, http: opts.HTTP, api: opts.APIURL, volume: 100}
+	s := &Source{opts: opts, tracks: map[string]source.Track{}, charts: map[string]chartEntry{}, channels: map[string]chartEntry{}, http: opts.HTTP, api: opts.APIURL, volume: 100}
 	if s.http == nil {
 		s.http = &http.Client{Timeout: httpTimeout}
 	}
@@ -181,7 +182,9 @@ type videosResponse struct {
 		ID      string `json:"id"`
 		Snippet struct {
 			Title        string `json:"title"`
+			ChannelID    string `json:"channelId"`
 			ChannelTitle string `json:"channelTitle"`
+			PublishedAt  string `json:"publishedAt"`
 			Thumbnails   map[string]struct {
 				URL string `json:"url"`
 			} `json:"thumbnails"`
@@ -256,12 +259,17 @@ func (s *Source) get(ctx context.Context, path string, q url.Values, out any) er
 // costs 100 quota units, videos.list 1, so about 100 searches/day on the
 // default 10,000-unit quota. The guest UI debounces to make that last.
 func (s *Source) Search(ctx context.Context, query string, limit int) ([]source.Track, error) {
+	return s.searchVideos(ctx, url.Values{"maxResults": {strconv.Itoa(limit)}, "q": {query}})
+}
+
+// searchVideos runs search.list (100 units) with the given extra parameters,
+// then videos.list for durations, keeping the search ranking.
+func (s *Source) searchVideos(ctx context.Context, params url.Values) ([]source.Track, error) {
+	params.Set("part", "snippet")
+	params.Set("type", "video")
+	params.Set("videoCategoryId", musicCategory)
 	var sr searchResponse
-	err := s.get(ctx, "/search", url.Values{
-		"part": {"snippet"}, "type": {"video"}, "videoCategoryId": {musicCategory},
-		"maxResults": {strconv.Itoa(limit)}, "q": {query},
-	}, &sr)
-	if err != nil {
+	if err := s.get(ctx, "/search", params, &sr); err != nil {
 		return nil, err
 	}
 	ids := make([]string, 0, len(sr.Items))
@@ -301,6 +309,8 @@ func (s *Source) remember(vr videosResponse) []source.Track {
 			ID:          v.ID,
 			Title:       v.Snippet.Title,
 			Artist:      v.Snippet.ChannelTitle,
+			ArtistID:    v.Snippet.ChannelID,
+			Year:        source.YearOf(v.Snippet.PublishedAt),
 			Duration:    parseISODuration(v.ContentDetails.Duration),
 			ExternalURL: watchURL + v.ID,
 		}
@@ -488,4 +498,37 @@ func mapStatus(r Report, reportedAt time.Time, current string, playedAt time.Tim
 	pb.Playing = r.State == statePlaying || r.State == stateBuffering
 	pb.Ended = r.State == stateEnded
 	return pb
+}
+
+// channelVideos is how many of a channel's videos an artist page lists.
+const channelVideos = 25
+
+// Artist implements source.Browser: a channel's most viewed music videos.
+// One search.list call (100 units) per channel per chartTTL.
+// ponytail: channels whose uploads are not categorised Music come back empty;
+// retry without the category if that ever bites.
+func (s *Source) Artist(ctx context.Context, id string) (source.Artist, error) {
+	s.mu.Lock()
+	c, ok := s.channels[id]
+	s.mu.Unlock()
+	if !ok || time.Since(c.at) >= chartTTL {
+		tracks, err := s.searchVideos(ctx, url.Values{"channelId": {id}, "order": {"viewCount"}, "maxResults": {strconv.Itoa(channelVideos)}})
+		if err != nil {
+			return source.Artist{}, err
+		}
+		c = chartEntry{tracks: tracks, at: time.Now()}
+		s.mu.Lock()
+		s.channels[id] = c
+		s.mu.Unlock()
+	}
+	if len(c.tracks) == 0 {
+		return source.Artist{}, source.ErrNotFound
+	}
+	return source.Artist{ID: id, Name: c.tracks[0].Artist, ArtworkURL: c.tracks[0].ArtworkURL, Tracks: c.tracks}, nil
+}
+
+// Album implements source.Browser; YouTube has no albums, and tracks carry no
+// AlbumID so the UI never links here.
+func (s *Source) Album(context.Context, string) (source.Album, error) {
+	return source.Album{}, source.ErrNotFound
 }

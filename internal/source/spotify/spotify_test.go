@@ -58,16 +58,28 @@ func TestMapTrackAndArtwork(t *testing.T) {
 	ft := &spotify.FullTrack{
 		SimpleTrack: spotify.SimpleTrack{
 			ID: "id1", Name: "Song", Duration: 200000,
-			Artists:      []spotify.SimpleArtist{{Name: "A"}, {Name: "B"}},
+			Artists:      []spotify.SimpleArtist{{Name: "A", ID: "ar1"}, {Name: "B", ID: "ar2"}},
 			ExternalURLs: map[string]string{"spotify": "https://open.spotify.com/track/id1"},
 		},
-		Album: spotify.SimpleAlbum{Name: "Album", Images: []spotify.Image{
+		Album: spotify.SimpleAlbum{ID: "al1", Name: "Album", ReleaseDate: "1981-12-01", Images: []spotify.Image{
 			{Height: 640, URL: "big"}, {Height: 300, URL: "mid"}, {Height: 64, URL: "small"},
 		}},
 	}
 	tr := mapTrack(ft)
 	if tr.Artist != "A, B" || tr.ArtworkURL != "mid" || tr.ExternalURL == "" || tr.Duration != 200*time.Second {
 		t.Fatalf("%+v", tr)
+	}
+	if tr.ArtistID != "ar1" || tr.AlbumID != "al1" || tr.Year != 1981 {
+		t.Fatalf("browse keys: %+v", tr)
+	}
+	// an album's own track list carries no album: the parent's art and year apply
+	st := spotify.SimpleTrack{ID: "id2", Name: "Other"}
+	if tr2 := mapSimple(&st, &ft.Album); tr2.ArtworkURL != "mid" || tr2.Year != 1981 || tr2.AlbumID != "al1" || tr2.ArtistID != "" {
+		t.Fatalf("mapSimple: %+v", tr2)
+	}
+	al := mapAlbum(&spotify.SimpleAlbum{ID: "al1", Name: "Album", ReleaseDate: "1981", Artists: []spotify.SimpleArtist{{Name: "A", ID: "ar1"}}})
+	if al.Artist != "A" || al.ArtistID != "ar1" || al.Year != 1981 {
+		t.Fatalf("mapAlbum: %+v", al)
 	}
 	if pickImage([]spotify.Image{{Height: 64, URL: "s"}, {Height: 128, URL: "m"}}) != "m" {
 		t.Fatal("should fall back to the largest when none reach the minimum")

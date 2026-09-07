@@ -101,7 +101,8 @@ the 5-user limit is never an issue.
    once.
 
 Quota: a search costs 100 units of the default 10,000 per day, so roughly 100
-guest searches a day. The guest page debounces typing to make that last.
+guest searches a day. An artist (channel) page is also one search, cached for
+30 minutes per channel. The guest page debounces typing to make that last.
 Search is limited to YouTube's Music category.
 
 ## Run
@@ -198,7 +199,10 @@ use, and the TypeScript 7 package does not ship it.
 
 Implement `source.Source` in `internal/source/<name>/`, add it to the
 `Sources` list in `app.go`, and give it a card in the admin UI. Nothing else
-changes. Implement `source.ArtworkProvider` if artwork is not a public URL.
+changes. Optional interfaces: `source.ArtworkProvider` if artwork is not a
+public URL, `source.Charter` for a Top chart, `source.Browser` for artist and
+album pages (`/api/artist`, `/api/album`; set `ArtistID`/`AlbumID` on tracks
+so the guest UI knows what is linkable).
 
 ## Spotify policy notes
 

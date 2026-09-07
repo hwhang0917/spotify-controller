@@ -192,9 +192,10 @@ func (s *Source) Rescan() (int, error) {
 	tracks := make([]source.Track, 0, len(paths))
 	byID := make(map[string]*entry, len(paths))
 	for i, p := range paths {
-		id := trackID(p)
+		id := shortID(p)
 		t := results[i].Track
 		t.ID, t.Source = id, "local"
+		browseIDs(&t)
 		if results[i].HasPicture {
 			t.ArtworkURL = "/api/artwork/local/" + id
 		}
@@ -250,9 +251,79 @@ func duration(path string) time.Duration {
 	return format.SampleRate.D(stream.Len())
 }
 
-func trackID(path string) string {
-	sum := sha1.Sum([]byte(path))
+// shortID is the URL-safe key for a path, an artist or an album.
+func shortID(s string) string {
+	sum := sha1.Sum([]byte(s))
 	return hex.EncodeToString(sum[:])[:idLen]
+}
+
+// browseIDs derives the artist/album page keys from the tags. Case and
+// surrounding spaces are ignored so "the beatles" and "The Beatles" are one
+// artist; albums are keyed under their artist so two "Greatest Hits" stay apart.
+func browseIDs(t *source.Track) {
+	key := func(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+	if t.Artist == "" {
+		return
+	}
+	t.ArtistID = shortID("artist\x00" + key(t.Artist))
+	if t.Album != "" {
+		t.AlbumID = shortID("album\x00" + key(t.Artist) + "\x00" + key(t.Album))
+	}
+}
+
+// Artist implements source.Browser: every track by the artist, and their albums.
+// ponytail: linear scan per page view; index maps if libraries grow past ~50k.
+func (s *Source) Artist(_ context.Context, id string) (source.Artist, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a := source.Artist{ID: id}
+	seen := map[string]bool{}
+	for _, t := range s.tracks {
+		if t.ArtistID != id {
+			continue
+		}
+		if a.Name == "" {
+			a.Name = t.Artist
+		}
+		if a.ArtworkURL == "" {
+			a.ArtworkURL = t.ArtworkURL
+		}
+		a.Tracks = append(a.Tracks, t)
+		if t.AlbumID != "" && !seen[t.AlbumID] {
+			seen[t.AlbumID] = true
+			a.Albums = append(a.Albums, source.Album{ID: t.AlbumID, Name: t.Album, Artist: t.Artist, ArtistID: id, Year: t.Year, ArtworkURL: t.ArtworkURL})
+		}
+	}
+	if len(a.Tracks) == 0 {
+		return source.Artist{}, source.ErrNotFound
+	}
+	return a, nil
+}
+
+// Album implements source.Browser.
+func (s *Source) Album(_ context.Context, id string) (source.Album, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a := source.Album{ID: id}
+	for _, t := range s.tracks {
+		if t.AlbumID != id {
+			continue
+		}
+		if a.Name == "" {
+			a.Name, a.Artist, a.ArtistID = t.Album, t.Artist, t.ArtistID
+		}
+		if a.Year == 0 {
+			a.Year = t.Year
+		}
+		if a.ArtworkURL == "" {
+			a.ArtworkURL = t.ArtworkURL
+		}
+		a.Tracks = append(a.Tracks, t)
+	}
+	if len(a.Tracks) == 0 {
+		return source.Album{}, source.ErrNotFound
+	}
+	return a, nil
 }
 
 // readTags returns what the file's tags say, falling back to the filename.
