@@ -56,13 +56,31 @@ const loadDevices = () => run('devices', async () => { devices.value = await api
 const togglePlay = () => run('play', () => (state.value?.nowPlaying?.playing ? api.Pause() : api.Resume()))
 const isReady = (id: string) => sources.value.find((s) => s.id === id)?.ready ?? false
 
+// Wails events push changes; the poll is a safety net so the guest list and
+// server status never go stale if a push is missed.
+const POLL_MS = 3000
+
 const stops: Array<() => void> = []
+let poll: number | undefined
 onMounted(async () => {
-  await refresh()
+  try {
+    await refresh()
+  } catch (e) {
+    error.value = String(e)
+  }
   stops.push(EventsOn('state', (s: State) => { state.value = s }))
   stops.push(EventsOn('guests', (g: GuestInfo[]) => { guests.value = g }))
+  poll = window.setInterval(async () => {
+    try {
+      const [g, st] = await Promise.all([api.Guests(), api.Status()])
+      guests.value = g
+      server.value = { ...st, port: server.value.port || st.port }
+    } catch (e) {
+      error.value = String(e)
+    }
+  }, POLL_MS)
 })
-onUnmounted(() => stops.forEach((s) => s()))
+onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll) })
 </script>
 
 <template>

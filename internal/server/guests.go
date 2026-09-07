@@ -56,11 +56,17 @@ func (g *Guests) get(id string) *guest {
 	return gu
 }
 
-// seen records a visit and returns the name (empty if none yet).
+// seen records a visit and returns the name (empty if none yet). A first
+// visit notifies so the admin sees the guest before they pick a name.
 func (g *Guests) seen(id string) string {
 	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.get(id).name
+	_, known := g.guests[id]
+	name := g.get(id).name
+	g.mu.Unlock()
+	if !known {
+		g.changed()
+	}
+	return name
 }
 
 func (g *Guests) setName(id, name string) {
