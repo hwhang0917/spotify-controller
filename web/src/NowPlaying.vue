@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import Artwork from './Artwork.vue'
 import SourceIcon from './SourceIcon.vue'
+import Wave from './Wave.vue'
 import SourceLink from './SourceLink.vue'
 import { t } from './i18n'
 import type { State } from './types'
@@ -59,8 +60,8 @@ const pct = computed(() => {
           <div class="space-y-3">
             <div class="space-y-1.5">
               <Progress :model-value="pct" class="h-1.5" />
-              <div class="flex justify-between font-mono text-xs text-muted-foreground">
-                <span>{{ fmtDuration(positionMs * NS_PER_MS) }}</span>
+              <div class="flex items-center justify-between font-mono text-xs text-muted-foreground">
+                <span class="flex items-center gap-2"><Wave :playing="np.playing" />{{ fmtDuration(positionMs * NS_PER_MS) }}</span>
                 <span>{{ fmtDuration(np.track.duration) }}</span>
               </div>
             </div>

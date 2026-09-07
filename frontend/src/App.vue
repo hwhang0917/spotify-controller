@@ -22,6 +22,7 @@ import YouTubeIcon from './YouTubeIcon.vue'
 import HelpTip from './HelpTip.vue'
 import GuideDialog from './GuideDialog.vue'
 import SourceIcon from './SourceIcon.vue'
+import Wave from './Wave.vue'
 import { toast } from 'vue-sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { locale, setLocale, t, tError } from './i18n'
@@ -309,8 +310,8 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                       class="cursor-pointer"
                       @update:model-value="onSeekInput" @value-commit="onSeekCommit"
                     />
-                    <div class="flex justify-between font-mono text-xs text-muted-foreground">
-                      <span>{{ fmtDuration(seekValue[0] * NS_PER_MS) }}</span>
+                    <div class="flex items-center justify-between font-mono text-xs text-muted-foreground">
+                      <span class="flex items-center gap-2"><Wave :playing="!!np?.playing" />{{ fmtDuration(seekValue[0] * NS_PER_MS) }}</span>
                       <span>{{ fmtDuration(np?.track.duration ?? 0) }}</span>
                     </div>
                   </div>

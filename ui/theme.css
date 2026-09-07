@@ -116,3 +116,38 @@
 @utility eyebrow {
   @apply font-mono text-xs font-medium uppercase text-muted-foreground;
 }
+
+/* Playing indicator: five bars bobbing at different phases. Paused = frozen and faded. */
+@keyframes vm-eq {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+.vm-eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+  opacity: 0.25;
+  transition: opacity 600ms ease;
+}
+.vm-eq > i {
+  display: block;
+  width: 3px;
+  height: 100%;
+  border-radius: 1px;
+  background: currentColor;
+  transform-origin: bottom;
+  transform: scaleY(0.3);
+  animation: vm-eq 1.1s ease-in-out infinite;
+  animation-play-state: paused;
+}
+.vm-eq.playing { opacity: 1; }
+.vm-eq.playing > i { animation-play-state: running; }
+.vm-eq > i:nth-child(1) { animation-delay: -0.9s; }
+.vm-eq > i:nth-child(2) { animation-delay: -0.5s; }
+.vm-eq > i:nth-child(3) { animation-delay: -0.2s; }
+.vm-eq > i:nth-child(4) { animation-delay: -0.7s; }
+.vm-eq > i:nth-child(5) { animation-delay: -0.4s; }
+@media (prefers-reduced-motion: reduce) {
+  .vm-eq > i { animation: none; transform: scaleY(0.6); }
+}
