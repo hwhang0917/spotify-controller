@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or idea
+    url: https://github.com/hwhang0917/vibe-music/discussions
+    about: Not sure it is a bug? Ask here first.

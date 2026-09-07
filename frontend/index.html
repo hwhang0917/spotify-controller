@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>vibe-music</title>
+    <link rel="icon" type="image/png" sizes="64x64" href="./favicon.png"/>
+    <style>
+      /* Splash painted from the static HTML, before the JS bundle runs; App.vue
+         renders the same markup until its first data load so nothing jumps. */
+      html, body { margin: 0; background: #fafafa; }
+      .splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: #fafafa; color: #171717; }
+      .splash img { width: 96px; height: 96px; border-radius: 22px; }
+      .splash-name { margin: 0; font: 500 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; color: #8f8f8f; }
+      .splash-dot { width: 6px; height: 6px; border-radius: 999px; background: #171717; animation: splash-pulse 1s ease-in-out infinite; }
+      @keyframes splash-pulse { 0%, 100% { opacity: .2 } 50% { opacity: 1 } }
+      @media (prefers-reduced-motion: reduce) { .splash-dot { animation: none; opacity: .6 } }
+    </style>
+</head>
+<body>
+<div id="app">
+<div class="splash" aria-busy="true">
+  <img src="./favicon.png" width="96" height="96" alt="" />
+  <p class="splash-name">vibe-music</p>
+  <span class="splash-dot"></span>
+</div>
+</div>
+<script src="./src/main.ts" type="module"></script>
+</body>
+</html>

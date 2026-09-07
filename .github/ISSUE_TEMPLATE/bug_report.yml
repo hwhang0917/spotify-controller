@@ -1,0 +1,56 @@
+name: Bug report
+description: Something does not work as described in the README.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for the report. The more of this you fill in, the faster it gets fixed.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: side
+    attributes:
+      label: Where
+      options:
+        - Admin window (host)
+        - Guest page (phone / browser)
+        - Both
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Music source in use
+      multiple: true
+      options:
+        - Local files
+        - Spotify
+        - YouTube Music
+        - None / not source related
+  - type: input
+    id: version
+    attributes:
+      label: vibe-music version or commit
+      placeholder: e.g. v0.3.0 or 65b1000
+  - type: input
+    id: os
+    attributes:
+      label: Host OS and guest browser
+      placeholder: e.g. Windows 11 · iPhone Safari
+  - type: textarea
+    id: log
+    attributes:
+      label: Log lines
+      description: From vibe-music.log (path shown under Info in the admin footer). Remove names and IP addresses first.
+      render: json
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, the exact toast text, whether it happens every time.

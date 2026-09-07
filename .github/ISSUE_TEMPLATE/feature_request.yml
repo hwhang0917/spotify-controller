@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest something vibe-music should do.
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do in the office that is awkward or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: How it should work for the host and for guests.
+    validations:
+      required: true
+  - type: dropdown
+    id: side
+    attributes:
+      label: Where
+      multiple: true
+      options:
+        - Admin window (host)
+        - Guest page
+        - Music sources (Local / Spotify / YouTube)
+        - Other
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered

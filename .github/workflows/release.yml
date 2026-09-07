@@ -1,0 +1,115 @@
+name: Release
+
+# A release is cut when a change to VERSION lands on master (a merge, not a
+# branch push). The tag v<VERSION> is created by the release step itself; if
+# that tag already exists nothing is published, so merging other changes to
+# master is a no-op here.
+on:
+  push:
+    branches: [master]
+    paths: [VERSION]
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      new: ${{ steps.v.outputs.new }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v$(tr -d '[:space:]' < VERSION)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "$tag already released; nothing to do"; echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: check-version
+    if: needs.check-version.outputs.new == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: windows/amd64
+            os: ubuntu-latest
+            artifact: vibe-music-windows-amd64.exe
+          - target: linux/amd64
+            os: ubuntu-latest
+            artifact: vibe-music-linux-amd64.tar.gz
+            # ubuntu-24.04 ships webkit2gtk 4.1 only; wails build passes its
+            # own -tags, so GOFLAGS would be ignored here
+            tags: -tags webkit2_41
+          - target: darwin/amd64
+            os: macos-latest
+            artifact: vibe-music-darwin-amd64.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            web/package-lock.json
+
+      - name: Install Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev libasound2-dev
+
+      - name: Build UIs
+        run: |
+          npm --prefix frontend ci && npm --prefix web ci
+          npm --prefix frontend run build && npm --prefix web run build
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+
+      - name: Build ${{ matrix.target }}
+        run: $(go env GOPATH)/bin/wails build -platform ${{ matrix.target }} -s -skipbindings ${{ matrix.tags }}
+
+      - name: Package
+        run: |
+          set -e
+          cd build/bin
+          case "${{ matrix.target }}" in
+            windows/amd64) mv vibe-music.exe "${{ matrix.artifact }}" ;;
+            linux/amd64)   tar czf "${{ matrix.artifact }}" vibe-music ;;
+            darwin/amd64)  ditto -c -k --keepParent vibe-music.app "${{ matrix.artifact }}" ;;
+          esac
+          ls -la
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: build/bin/${{ matrix.artifact }}
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    needs: [check-version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Tag and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check-version.outputs.tag }}
+        run: gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "vibe-music $TAG" --generate-notes
