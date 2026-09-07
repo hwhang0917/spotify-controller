@@ -50,6 +50,24 @@ const error = ref('')
 const connected = ref(false)
 const blocked = ref(false)
 const inviteRequired = ref(false)
+// Waiting screens (invite required, blocked) have no event stream, so they
+// poll /api/me until the host lets the guest in, then continue in place.
+const ACCESS_MS = 3000
+let access: number | undefined
+function waitForAccess() {
+  if (access !== undefined) return
+  access = window.setInterval(async () => {
+    try {
+      const me = await api<{ name: string }>('GET', '/api/me')
+      window.clearInterval(access)
+      access = undefined
+      inviteRequired.value = false
+      blocked.value = false
+      name.value = me.name
+      startStream()
+    } catch { /* still waiting */ }
+  }, ACCESS_MS)
+}
 const inviteInvalid = new URLSearchParams(location.search).get('invite') === 'invalid'
 // Health check: the stream dropping could be a kick or a reconnect blip, so
 // the page only goes "offline" once /api/health itself fails. It then probes
@@ -97,8 +115,8 @@ async function act(fn: () => Promise<string | void>) {
     const msg = await fn()
     if (msg) toast.success(msg)
   } catch (e) {
-    if (e instanceof ApiError && e.code === 'blocked') { blocked.value = true; return }
-    if (e instanceof ApiError && e.code === 'invite_required') { inviteRequired.value = true; return }
+    if (e instanceof ApiError && e.code === 'blocked') { blocked.value = true; es?.close(); es = null; waitForAccess(); return }
+    if (e instanceof ApiError && e.code === 'invite_required') { inviteRequired.value = true; waitForAccess(); return }
     if (!(e instanceof ApiError)) { probe(); return } // network failure: is the server gone?
     const msg = tError((e as Error).message)
     if (name.value) toast.error(msg)
@@ -146,14 +164,8 @@ const isSpotify = computed(() => enabledSources.value.some((s) => s.id === 'spot
 const isYouTube = computed(() => enabledSources.value.some((s) => s.id === 'youtube'))
 
 let es: EventSource | null = null
-onMounted(async () => {
-  await act(async () => {
-    const me = await api<{ name: string }>('GET', '/api/me')
-    name.value = me.name
-  })
-  loading.value = false
-  if (blocked.value || inviteRequired.value || offline.value) return
-  inviteRequired.value = false
+function startStream() {
+  if (es) return
   es = new EventSource('/api/events')
   es.addEventListener('state', (e) => {
     const s: State = JSON.parse((e as MessageEvent).data)
@@ -169,8 +181,18 @@ onMounted(async () => {
     probe()
     act(() => api('GET', '/api/me'))
   }
+}
+
+onMounted(async () => {
+  await act(async () => {
+    const me = await api<{ name: string }>('GET', '/api/me')
+    name.value = me.name
+  })
+  loading.value = false
+  if (blocked.value || inviteRequired.value || offline.value) return
+  startStream()
 })
-onUnmounted(() => { es?.close(); window.clearInterval(health) })
+onUnmounted(() => { es?.close(); window.clearInterval(health); window.clearInterval(access) })
 </script>
 
 <template>
