@@ -46,6 +46,26 @@ const (
 	errSpotifyLogin  = "spotify_login_timeout"
 )
 
+// Winsock reports its own errno values; Go's syscall.EADDRINUSE/EACCES are
+// the POSIX ones and never match on Windows.
+const (
+	wsaEADDRINUSE syscall.Errno = 10048
+	wsaEACCES     syscall.Errno = 10013
+)
+
+func isErrno(err error, targets ...syscall.Errno) bool {
+	var errno syscall.Errno
+	if !errors.As(err, &errno) {
+		return false
+	}
+	for _, t := range targets {
+		if errno == t {
+			return true
+		}
+	}
+	return false
+}
+
 // codeErr formats an error as "code: detail" so the UI can translate it.
 func codeErr(code, detail string) error {
 	if detail == "" {
@@ -59,9 +79,9 @@ func uiError(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, syscall.EADDRINUSE):
+	case isErrno(err, syscall.EADDRINUSE, wsaEADDRINUSE):
 		return codeErr(errPortInUse, "")
-	case errors.Is(err, syscall.EACCES):
+	case isErrno(err, syscall.EACCES, wsaEACCES):
 		return codeErr(errPortDenied, "")
 	case errors.Is(err, spotify.ErrNotConnected):
 		return codeErr(errSpotifyNoConn, "")
