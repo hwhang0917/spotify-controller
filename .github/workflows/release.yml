@@ -1,23 +1,37 @@
 name: Release
 
-# Runs when a version tag such as v0.0.1 is pushed. The tag must match the
-# VERSION file, so bumping VERSION is part of cutting a release.
+# A release is cut when a change to VERSION lands on master (a merge, not a
+# branch push). The tag v<VERSION> is created by the release step itself; if
+# that tag already exists nothing is published, so merging other changes to
+# master is a no-op here.
 on:
   push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+    branches: [master]
+    paths: [VERSION]
 
 jobs:
   check-version:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      new: ${{ steps.v.outputs.new }}
     steps:
       - uses: actions/checkout@v7
-      - name: Tag must match VERSION
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          want="v$(tr -d '[:space:]' < VERSION)"
-          test "$want" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != VERSION $want"; exit 1; }
+          tag="v$(tr -d '[:space:]' < VERSION)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "$tag already released; nothing to do"; echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
 
   build:
     needs: check-version
+    if: needs.check-version.outputs.new == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -84,7 +98,7 @@ jobs:
           retention-days: 1
 
   release:
-    needs: build
+    needs: [check-version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -94,7 +108,8 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Create GitHub release
+      - name: Tag and publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "vibe-music $GITHUB_REF_NAME" --generate-notes
+          TAG: ${{ needs.check-version.outputs.tag }}
+        run: gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "vibe-music $TAG" --generate-notes

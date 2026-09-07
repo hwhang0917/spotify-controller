@@ -87,16 +87,13 @@ the run as a short-lived artifact.
 
 `VERSION` holds the version (e.g. `0.0.1`); `version.go` embeds it, so the
 binary, the admin Info dialog and the guest About dialog all show the same
-value with no build flags. To release: bump `VERSION`, commit, then
-
-```sh
-git tag v$(cat VERSION) && git push origin v$(cat VERSION)
-```
-
-`.github/workflows/release.yml` checks the tag against `VERSION`, builds
+value with no build flags. To release: bump `VERSION` on a branch and merge
+it to `master`. `.github/workflows/release.yml` runs on pushes to `master`
+that touch `VERSION`; if no tag `v<VERSION>` exists yet it builds
 windows/amd64 and linux/amd64 (Ubuntu, Windows cross-compiled) and
-darwin/amd64 (macOS runner), and publishes them on a GitHub release with
-generated notes. ARM targets are not built yet.
+darwin/amd64 (macOS runner), then creates the tag and a GitHub release with
+generated notes. Pushing to other branches never releases. ARM targets are not
+built yet.
 
 ## Layout
 
