@@ -5,6 +5,9 @@ export interface Track {
   title: string
   artist: string
   album: string
+
+  genre?: string
+  year?: number
   duration: number // nanoseconds (Go time.Duration)
   artworkUrl?: string
   externalUrl?: string

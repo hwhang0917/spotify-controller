@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Progress } from '@/components/ui/progress'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Artwork from './Artwork.vue'
@@ -49,6 +50,7 @@ const inviteTtl = ref('480')
 const TTL_OPTIONS = [['60', 'invite.ttl.1h'], ['480', 'invite.ttl.8h'], ['1440', 'invite.ttl.24h'], ['10080', 'invite.ttl.7d']] as const
 const devices = ref<Device[]>([])
 const folders = ref<string[]>([])
+const scan = ref<{ done: number; total: number } | null>(null) // local index progress; null when idle
 const volume = ref([100])
 const skipRatio = ref([50])
 const busy = ref('')
@@ -244,6 +246,7 @@ onMounted(async () => {
   stops.push(EventsOn('state', (s: State) => { state.value = s; api.Sources().then((x) => { sources.value = x }).catch(() => {}) }))
   stops.push(EventsOn('notice', (code: string) => { toast.warning(t(`notice.${code}`)) }))
   stops.push(EventsOn('source-error', (msg: string) => { toast.error(t('notice.sourceError', { msg })) }))
+  stops.push(EventsOn('local:scan', (p: { done: number; total: number }) => { scan.value = p.done >= p.total ? null : p }))
   stops.push(EventsOn('guests', (g: GuestInfo[]) => { guests.value = g ?? []; api.Invitations().then((i) => { invitations.value = i ?? [] }).catch(() => {}) }))
   window.addEventListener('keydown', onKey)
   tick = window.setInterval(() => { now.value = Date.now() }, 500)
@@ -550,6 +553,10 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                   </li>
                 </ul>
                 <p v-else class="text-sm text-muted-foreground">{{ t('local.empty') }}</p>
+                <div v-if="scan" class="space-y-1.5">
+                  <Progress :model-value="scan.total ? (scan.done / scan.total) * 100 : 0" class="h-1.5" />
+                  <p class="font-mono text-xs text-muted-foreground">{{ t('local.scanning', { done: scan.done, total: scan.total }) }}</p>
+                </div>
                 <div class="flex gap-2">
                   <Button :disabled="!!busy" @click="addFolder"><FolderPlus />{{ t('local.add') }}</Button>
                   <Button variant="outline" :disabled="!folders.length || !!busy" @click="rescan"><RefreshCw />{{ t('local.rescan') }}</Button>

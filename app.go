@@ -39,6 +39,7 @@ const (
 	youtubeEvent     = "yt:cmd"       // commands for the embedded YouTube player
 	noticeEvent      = "notice"       // one-off warnings for the admin (toast), by code
 	sourceErrorEvent = "source-error" // a guest-facing source failure, verbatim
+	localScanEvent   = "local:scan"   // {done, total} while local files are indexed
 )
 
 // Sources that need the internet. Offline, startup leaves them off.
@@ -170,6 +171,17 @@ type SourceStatus struct {
 
 func NewApp() *App { return &App{} }
 
+// localCache adapts the store to local.Cache.
+type localCache struct{ db *store.Store }
+
+func (c localCache) Get(path string, size int64, mtime time.Time) ([]byte, bool) {
+	return c.db.LocalIndexGet(path, size, mtime)
+}
+func (c localCache) Put(path string, size int64, mtime time.Time, data []byte) {
+	c.db.LocalIndexPut(path, size, mtime, data)
+}
+func (c localCache) Prune(before time.Time) { c.db.LocalIndexPrune(before) }
+
 // audit logs an admin action; guest actions are logged by the server package.
 func (a *App) audit(action string, kv ...any) {
 	slog.Info("admin", append([]any{"action", action}, kv...)...)
@@ -202,6 +214,10 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	a.local = local.New(cfg.Local.Folders)
+	a.local.SetCache(localCache{a.db})
+	a.local.SetProgress(func(done, total int) {
+		runtime.EventsEmit(a.ctx, localScanEvent, map[string]int{"done": done, "total": total})
+	})
 	a.spotify = spotify.New(spotify.Options{
 		ClientID:     cfg.Spotify.ClientID,
 		DeviceID:     cfg.Spotify.DeviceID,

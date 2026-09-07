@@ -63,9 +63,14 @@ host process.
 
 ### Local files
 
-In the admin window, paste one or more folders (one per line), Save, Rescan.
-MP3, WAV, FLAC and OGG Vorbis are indexed; tags and embedded artwork are read
-where the format has them. Output goes to the OS default audio device.
+In the admin window, add one or more folders; adding or removing one rescans
+right away, with a progress bar while it runs. MP3, WAV, FLAC and OGG Vorbis
+are indexed: title, artist, album, genre, year, duration and whether there is
+embedded artwork (all searchable except artwork). Each file is read once and
+the result is cached in the database by path, size and mtime, so later scans
+and launches only open new or changed files. An MP3's duration needs a pass
+over the whole file, which is why the first scan of a big library takes a
+while and later ones do not. Output goes to the OS default audio device.
 
 ### Spotify
 

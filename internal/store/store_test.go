@@ -158,3 +158,22 @@ func TestPlayHistory(t *testing.T) {
 		t.Fatalf("history should be gone: %s", top)
 	}
 }
+
+func TestLocalIndexCache(t *testing.T) {
+	s := open(t)
+	mt := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	if _, ok := s.LocalIndexGet("/a.mp3", 10, mt); ok {
+		t.Fatal("empty cache hit")
+	}
+	s.LocalIndexPut("/a.mp3", 10, mt, []byte(`{"x":1}`))
+	if d, ok := s.LocalIndexGet("/a.mp3", 10, mt); !ok || string(d) != `{"x":1}` {
+		t.Fatalf("get: %q %v", d, ok)
+	}
+	if _, ok := s.LocalIndexGet("/a.mp3", 11, mt); ok {
+		t.Fatal("changed size must miss")
+	}
+	s.LocalIndexPrune(time.Now().Add(time.Second)) // nothing seen after that: gone
+	if _, ok := s.LocalIndexGet("/a.mp3", 10, mt); ok {
+		t.Fatal("pruned entry still cached")
+	}
+}

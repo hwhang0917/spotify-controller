@@ -46,6 +46,13 @@ CREATE TABLE IF NOT EXISTS invitations (
 	uses       INTEGER NOT NULL DEFAULT 0,
 	used_by    TEXT NOT NULL DEFAULT ''     -- guest id that redeemed it; a link works once
 );
+CREATE TABLE IF NOT EXISTS local_index (
+	path    TEXT PRIMARY KEY,
+	size    INTEGER NOT NULL,
+	mtime   TEXT NOT NULL,
+	data    TEXT NOT NULL,                   -- local.indexed JSON (tags, duration, artwork flag)
+	seen_at TEXT NOT NULL                    -- last scan that found the file
+);
 CREATE TABLE IF NOT EXISTS plays (
 	source      TEXT NOT NULL,
 	track_id    TEXT NOT NULL,
@@ -359,4 +366,30 @@ func (s *Store) TopTracks(sourceID string, limit int) ([]json.RawMessage, error)
 		out = append(out, json.RawMessage(t))
 	}
 	return out, rows.Err()
+}
+
+// --- local file index cache (see local.Cache) ---
+
+// LocalIndexGet returns the cached record if path is unchanged, marking it seen.
+func (s *Store) LocalIndexGet(path string, size int64, mtime time.Time) ([]byte, bool) {
+	var data string
+	err := s.db.QueryRow(`SELECT data FROM local_index WHERE path = ? AND size = ? AND mtime = ?`,
+		path, size, mtime.UTC().Format(time.RFC3339Nano)).Scan(&data)
+	if err != nil {
+		return nil, false
+	}
+	_, _ = s.db.Exec(`UPDATE local_index SET seen_at = ? WHERE path = ?`, time.Now().UTC().Format(time.RFC3339Nano), path)
+	return []byte(data), true
+}
+
+// LocalIndexPut stores the record for path at this size and mtime.
+func (s *Store) LocalIndexPut(path string, size int64, mtime time.Time, data []byte) {
+	_, _ = s.db.Exec(`INSERT INTO local_index(path, size, mtime, data, seen_at) VALUES(?, ?, ?, ?, ?)
+		ON CONFLICT(path) DO UPDATE SET size = excluded.size, mtime = excluded.mtime, data = excluded.data, seen_at = excluded.seen_at`,
+		path, size, mtime.UTC().Format(time.RFC3339Nano), string(data), time.Now().UTC().Format(time.RFC3339Nano))
+}
+
+// LocalIndexPrune forgets files no scan has seen since before.
+func (s *Store) LocalIndexPrune(before time.Time) {
+	_, _ = s.db.Exec(`DELETE FROM local_index WHERE seen_at < ?`, before.UTC().Format(time.RFC3339Nano))
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // writeWAV writes a valid 16-bit mono PCM file of n samples of silence.
@@ -53,6 +54,9 @@ func TestScanAndSearch(t *testing.T) {
 	if len(all) != 2 || all[0].Title != "Morning Song" || all[1].Title != "evening-song" {
 		t.Fatalf("index: %+v", all)
 	}
+	if all[0].Duration == 0 || all[0].Duration > 2*time.Second {
+		t.Fatalf("duration should come from the scan: %v", all[0].Duration)
+	}
 	hits, _ := s.Search(context.Background(), "SONG", 1)
 	if len(hits) != 1 {
 		t.Fatalf("limit: %+v", hits)
@@ -81,5 +85,45 @@ func TestScanAndSearch(t *testing.T) {
 func TestGainMapping(t *testing.T) {
 	if gainFor(100) != 0 || gainFor(0) != -1 || gainFor(50) != -0.5 {
 		t.Fatalf("gain: %v %v %v", gainFor(100), gainFor(0), gainFor(50))
+	}
+}
+
+type memCache struct {
+	m    map[string][]byte
+	hits int
+}
+
+func (c *memCache) Get(path string, _ int64, _ time.Time) ([]byte, bool) {
+	d, ok := c.m[path]
+	if ok {
+		c.hits++
+	}
+	return d, ok
+}
+func (c *memCache) Put(path string, _ int64, _ time.Time, d []byte) { c.m[path] = d }
+func (c *memCache) Prune(time.Time)                                 {}
+
+// A second scan answers from the cache and reports progress to the end.
+func TestRescanUsesCacheAndReportsProgress(t *testing.T) {
+	root := t.TempDir()
+	writeWAV(t, filepath.Join(root, "a.wav"), 4410)
+	writeWAV(t, filepath.Join(root, "b.wav"), 4410)
+	s := New([]string{root})
+	c := &memCache{m: map[string][]byte{}}
+	s.SetCache(c)
+	var last [2]int
+	s.SetProgress(func(done, total int) { last = [2]int{done, total} })
+	if _, err := s.Rescan(); err != nil || c.hits != 0 || len(c.m) != 2 {
+		t.Fatalf("first scan: hits=%d cached=%d err=%v", c.hits, len(c.m), err)
+	}
+	if _, err := s.Rescan(); err != nil || c.hits != 2 {
+		t.Fatalf("second scan should hit the cache: hits=%d err=%v", c.hits, err)
+	}
+	if last != [2]int{2, 2} {
+		t.Fatalf("progress: %v", last)
+	}
+	all, _ := s.Search(context.Background(), "", 0)
+	if len(all) != 2 || all[0].Duration == 0 {
+		t.Fatalf("cached index lost data: %+v", all)
 	}
 }

@@ -18,6 +18,8 @@ type Track struct {
 	Title    string        `json:"title"`
 	Artist   string        `json:"artist"`
 	Album    string        `json:"album"`
+	Genre    string        `json:"genre,omitempty"`
+	Year     int           `json:"year,omitempty"`
 	Duration time.Duration `json:"duration"` // 0 when unknown until played
 	// ArtworkURL is absolute (Spotify CDN) or app-relative ("/api/artwork/{id}").
 	ArtworkURL string `json:"artworkUrl,omitempty"`

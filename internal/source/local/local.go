@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -53,16 +54,20 @@ var (
 // ErrAudioOutput wraps speaker initialisation failures.
 var ErrAudioOutput = errors.New("audio output")
 
+// entry is the per-track file info. Artwork is read from the file on demand
+// rather than held for every track.
 type entry struct {
-	path    string
-	picture *tag.Picture
+	path       string
+	hasPicture bool
 }
 
 type Source struct {
-	mu      sync.Mutex
-	folders []string
-	tracks  []source.Track
-	byID    map[string]*entry
+	mu       sync.Mutex
+	folders  []string
+	tracks   []source.Track
+	byID     map[string]*entry
+	cache    Cache
+	progress func(done, total int)
 
 	// playback (guarded by mu; sample positions additionally by speaker.Lock)
 	stream  beep.StreamSeekCloser
@@ -103,11 +108,44 @@ func (s *Source) Deactivate(ctx context.Context) error {
 	return s.Stop(ctx)
 }
 
-// Rescan walks the folders and rebuilds the index. Returns the track count.
-// ponytail: synchronous and blocks the caller; fine for a few thousand files.
+// Cache remembers what a file indexed to (tags and duration) keyed by path,
+// size and mtime, so a rescan only opens files that are new or changed.
+// Reading an MP3's duration means reading the whole file, so this is what
+// keeps startup quick for a large library.
+type Cache interface {
+	Get(path string, size int64, mtime time.Time) ([]byte, bool)
+	Put(path string, size int64, mtime time.Time, data []byte)
+	Prune(before time.Time) // forget files not seen since the scan started
+}
+
+// SetCache installs the index cache (nil disables caching).
+func (s *Source) SetCache(c Cache) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cache = c
+}
+
+// SetProgress installs a callback that receives (done, total) while a rescan runs.
+func (s *Source) SetProgress(fn func(done, total int)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.progress = fn
+}
+
+// indexed is what the cache stores per file.
+type indexed struct {
+	Track      source.Track `json:"track"`
+	HasPicture bool         `json:"hasPicture"`
+}
+
+// scanWorkers bounds concurrent file reads; the work is I/O, not CPU.
+const scanWorkers = 4
+
+// Rescan walks the folders and rebuilds the index: tags, duration, and
+// whether there is embedded artwork. Returns the track count.
 func (s *Source) Rescan() (int, error) {
 	s.mu.Lock()
-	folders := s.folders
+	folders, cache, progress := s.folders, s.cache, s.progress
 	s.mu.Unlock()
 
 	var paths []string
@@ -126,24 +164,90 @@ func (s *Source) Rescan() (int, error) {
 		}
 	}
 	sort.Strings(paths)
+	if progress != nil {
+		progress(0, len(paths))
+	}
+
+	started := time.Now()
+	results := make([]indexed, len(paths))
+	var done atomic.Int64
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, scanWorkers)
+	for i, p := range paths {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, p string) {
+			defer func() { <-sem; wg.Done() }()
+			results[i] = index(p, cache)
+			if progress != nil {
+				progress(int(done.Add(1)), len(paths))
+			}
+		}(i, p)
+	}
+	wg.Wait()
+	if cache != nil {
+		cache.Prune(started)
+	}
 
 	tracks := make([]source.Track, 0, len(paths))
 	byID := make(map[string]*entry, len(paths))
-	for _, p := range paths {
+	for i, p := range paths {
 		id := trackID(p)
-		t, pic := readTags(p)
+		t := results[i].Track
 		t.ID, t.Source = id, "local"
-		if pic != nil {
+		if results[i].HasPicture {
 			t.ArtworkURL = "/api/artwork/local/" + id
 		}
 		tracks = append(tracks, t)
-		byID[id] = &entry{path: p, picture: pic}
+		byID[id] = &entry{path: p, hasPicture: results[i].HasPicture}
 	}
 
 	s.mu.Lock()
 	s.tracks, s.byID = tracks, byID
 	s.mu.Unlock()
 	return len(tracks), nil
+}
+
+// index returns the cached record for a file or reads tags and duration.
+func index(path string, cache Cache) indexed {
+	st, err := os.Stat(path)
+	if err != nil {
+		t, _ := readTags(path)
+		return indexed{Track: t}
+	}
+	if cache != nil {
+		if data, ok := cache.Get(path, st.Size(), st.ModTime()); ok {
+			var ix indexed
+			if json.Unmarshal(data, &ix) == nil {
+				return ix
+			}
+		}
+	}
+	t, pic := readTags(path)
+	t.Duration = duration(path)
+	ix := indexed{Track: t, HasPicture: pic != nil}
+	if cache != nil {
+		if data, err := json.Marshal(ix); err == nil {
+			cache.Put(path, st.Size(), st.ModTime(), data)
+		}
+	}
+	return ix
+}
+
+// duration opens the file with its decoder and asks for the sample count.
+// FLAC, WAV and OGG answer from headers; MP3 has to read every frame header.
+func duration(path string) time.Duration {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+	stream, format, err := supported[strings.ToLower(filepath.Ext(path))](f)
+	if err != nil {
+		return 0
+	}
+	defer stream.Close()
+	return format.SampleRate.D(stream.Len())
 }
 
 func trackID(path string) string {
@@ -167,7 +271,7 @@ func readTags(path string) (source.Track, *tag.Picture) {
 	if m.Title() != "" {
 		t.Title = m.Title()
 	}
-	t.Artist, t.Album = m.Artist(), m.Album()
+	t.Artist, t.Album, t.Genre, t.Year = m.Artist(), m.Album(), m.Genre(), m.Year()
 	return t, m.Picture()
 }
 
@@ -177,7 +281,7 @@ func (s *Source) Search(_ context.Context, q string, limit int) ([]source.Track,
 	q = strings.ToLower(strings.TrimSpace(q))
 	var out []source.Track
 	for _, t := range s.tracks {
-		if q == "" || strings.Contains(strings.ToLower(t.Title+" "+t.Artist+" "+t.Album), q) {
+		if q == "" || strings.Contains(strings.ToLower(fmt.Sprintf("%s %s %s %s %d", t.Title, t.Artist, t.Album, t.Genre, t.Year)), q) {
 			out = append(out, t)
 			if limit > 0 && len(out) == limit {
 				break
@@ -191,10 +295,14 @@ func (s *Source) Artwork(_ context.Context, id string) ([]byte, string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e, ok := s.byID[id]
-	if !ok || e.picture == nil {
+	if !ok || !e.hasPicture {
 		return nil, "", errors.New("no artwork")
 	}
-	return e.picture.Data, e.picture.MIMEType, nil
+	_, pic := readTags(e.path)
+	if pic == nil {
+		return nil, "", errors.New("no artwork")
+	}
+	return pic.Data, pic.MIMEType, nil
 }
 
 func (s *Source) Play(ctx context.Context, id string) error {
