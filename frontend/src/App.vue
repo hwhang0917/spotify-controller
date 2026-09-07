@@ -134,7 +134,8 @@ const createInvitation = () => run('invite', async () => {
 })
 const revokeInvitation = (id: number) => run('revoke', async () => { await api.RevokeInvitation(id); return t('toast.inviteRevoked') })
 const joinUrl = (code: string) => `${server.value.url || `http://<host>:${server.value.port}`}/join?invitationCode=${code}`
-const copyLink = (code: string) => run('copy', async () => { await navigator.clipboard.writeText(joinUrl(code)); return t('toast.linkCopied') })
+const copyText = (text: string) => run('copy', async () => { await navigator.clipboard.writeText(text); return t('toast.linkCopied') })
+const copyLink = (code: string) => copyText(joinUrl(code))
 const isExpired = (inv: Invitation) => new Date(inv.expiresAt).getTime() < Date.now()
 const fmtWhen = (iso: string) => new Date(iso).toLocaleString(locale.value === 'ko' ? 'ko-KR' : 'en-US', { dateStyle: 'short', timeStyle: 'short' })
 const block = (g: GuestInfo) => run('block', async () => {
@@ -307,7 +308,10 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                 </div>
                 <div v-if="server.running" class="space-y-1">
                   <Label>{{ t('server.joinUrl') }}</Label>
-                  <p class="select-all rounded-md border bg-muted px-3 py-2 font-mono text-sm">{{ server.url }}</p>
+                  <div class="flex gap-2">
+                    <p class="min-w-0 flex-1 select-all truncate rounded-md border bg-muted px-3 py-2 font-mono text-sm">{{ server.url }}</p>
+                    <Button variant="outline" :disabled="!!busy" :aria-label="t('server.copyUrl')" @click="copyText(server.url)"><Copy />{{ t('server.copyUrl') }}</Button>
+                  </div>
                 </div>
                 <div class="space-y-2">
                   <div class="flex justify-between">
