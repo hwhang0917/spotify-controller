@@ -55,4 +55,6 @@ func TestStopServerEndsEventStreams(t *testing.T) {
 	}
 }
 
-func itoa(n int) string { return string(rune('0'+n/10000)) + string(rune('0'+n/1000%10)) + string(rune('0'+n/100%10)) + string(rune('0'+n/10%10)) + string(rune('0'+n%10)) }
+func itoa(n int) string {
+	return string(rune('0'+n/10000)) + string(rune('0'+n/1000%10)) + string(rune('0'+n/100%10)) + string(rune('0'+n/10%10)) + string(rune('0'+n%10))
+}
