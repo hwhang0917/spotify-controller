@@ -110,9 +110,8 @@ Data lives in `$XDG_CONFIG_HOME/vibe-music/` (Linux),
 `vibe-music.db` (settings, guests, invitations, queue), `vibe-music.log`
 (JSON lines from the app and every guest request; one previous file is kept
 once it passes 5 MB) and, once connected, `spotify-token.json`, all `0600`.
-The admin's **Info** tab shows these paths with copy buttons; **Attribution**
-lists the open-source projects used, as does the "Open source licenses" link
-in the guest page footer (`ui/attributions.ts`, direct dependencies only:
+The admin window's footer has **Info** (these paths, with copy buttons) and
+**Open source licenses**; the guest page footer has the same licenses link (`ui/attributions.ts`, direct dependencies only:
 update it when adding one).
 
 ### What is and isn't stored

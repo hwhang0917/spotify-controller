@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Artwork from './Artwork.vue'
 import SpotifyIcon from './SpotifyIcon.vue'
@@ -385,8 +386,6 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
             <TabsTrigger value="server" class="flex-1">{{ t('tab.server') }}</TabsTrigger>
             <TabsTrigger value="sources" class="flex-1">{{ t('tab.sources') }}</TabsTrigger>
             <TabsTrigger value="guests" class="flex-1">{{ t('tab.guests') }} <Badge variant="secondary" class="ml-1">{{ guests.length }}</Badge></TabsTrigger>
-            <TabsTrigger value="info" class="flex-1">{{ t('tab.info') }}</TabsTrigger>
-            <TabsTrigger value="about" class="flex-1">{{ t('tab.about') }}</TabsTrigger>
           </TabsList>
 
           <!-- Server -->
@@ -675,46 +674,47 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
               </CardContent>
             </Card>
           </TabsContent>
-
-          <TabsContent value="info" class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-            <Card>
-              <CardHeader>
-                <CardTitle>{{ t('info.title') }}</CardTitle>
-                <CardDescription class="whitespace-pre-line break-keep">{{ t('info.desc') }}</CardDescription>
-              </CardHeader>
-              <CardContent class="space-y-4">
-                <div v-for="[label, path] in infoRows" :key="label" class="space-y-1">
-                  <Label>{{ t(label) }}</Label>
-                  <div class="flex items-center gap-2">
-                    <code class="min-w-0 flex-1 truncate rounded-md border bg-muted px-3 py-2 font-mono text-xs" :title="path">{{ path }}</code>
-                    <Button variant="outline" size="sm" :disabled="!!busy" :aria-label="t('info.copy')" @click="copyPath(path)"><Copy />{{ t('info.copy') }}</Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="about" class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-            <Card>
-              <CardHeader>
-                <CardTitle>{{ t('about.title') }}</CardTitle>
-                <CardDescription class="whitespace-pre-line break-keep">{{ t('about.desc') }}</CardDescription>
-              </CardHeader>
-              <CardContent class="space-y-6">
-                <div v-for="[label, deps] in [['about.go', goDeps], ['about.ui', uiDeps]] as const" :key="label" class="space-y-2">
-                  <p class="eyebrow">{{ t(label) }}</p>
-                  <ul class="divide-y rounded-md border">
-                    <li v-for="d in deps" :key="d.name" class="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                      <button type="button" class="flex min-w-0 items-center gap-1.5 hover:underline" @click="BrowserOpenURL(d.url)"><span class="truncate">{{ d.name }}</span><ExternalLink class="size-3 shrink-0 text-muted-foreground" /></button>
-                      <Badge variant="secondary" class="shrink-0 font-mono">{{ d.license }}</Badge>
-                    </li>
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
       </div>
+      <footer class="flex shrink-0 items-center justify-center gap-4 text-xs text-muted-foreground">
+        <Dialog>
+          <DialogTrigger as-child><button type="button" class="underline-offset-4 hover:underline">{{ t('tab.info') }}</button></DialogTrigger>
+          <DialogContent class="sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{{ t('info.title') }}</DialogTitle>
+              <DialogDescription class="whitespace-pre-line break-keep">{{ t('info.desc') }}</DialogDescription>
+            </DialogHeader>
+            <div class="space-y-4">
+              <div v-for="[label, path] in infoRows" :key="label" class="space-y-1">
+                <Label>{{ t(label) }}</Label>
+                <div class="flex items-center gap-2">
+                  <code class="min-w-0 flex-1 truncate rounded-md border bg-muted px-3 py-2 font-mono text-xs" :title="path">{{ path }}</code>
+                  <Button variant="outline" size="sm" :disabled="!!busy" :aria-label="t('info.copy')" @click="copyPath(path)"><Copy />{{ t('info.copy') }}</Button>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+        <span aria-hidden="true">·</span>
+        <Dialog>
+          <DialogTrigger as-child><button type="button" class="underline-offset-4 hover:underline">{{ t('tab.about') }}</button></DialogTrigger>
+          <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{{ t('about.title') }}</DialogTitle>
+              <DialogDescription class="whitespace-pre-line break-keep">{{ t('about.desc') }}</DialogDescription>
+            </DialogHeader>
+            <div v-for="[label, deps] in [['about.go', goDeps], ['about.ui', uiDeps]] as const" :key="label" class="space-y-2">
+              <p class="eyebrow">{{ t(label) }}</p>
+              <ul class="divide-y rounded-md border">
+                <li v-for="d in deps" :key="d.name" class="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                  <button type="button" class="flex min-w-0 items-center gap-1.5 hover:underline" @click="BrowserOpenURL(d.url)"><span class="truncate">{{ d.name }}</span><ExternalLink class="size-3 shrink-0 text-muted-foreground" /></button>
+                  <Badge variant="secondary" class="shrink-0 font-mono">{{ d.license }}</Badge>
+                </li>
+              </ul>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </footer>
     </main>
   </TooltipProvider>
 </template>
