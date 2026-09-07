@@ -69,8 +69,10 @@ where the format has them. Output goes to the OS default audio device.
 
 ### Spotify
 
-1. Create an app at the Spotify dashboard. Redirect URI: `http://127.0.0.1/callback`
-   (loopback IP, no port; `localhost` is rejected by Spotify).
+1. Create an app at the Spotify dashboard. Redirect URI:
+   `http://127.0.0.1:27272/callback` (the admin window shows the exact value;
+   the port is configurable there). Spotify rejects `localhost` and rejects a
+   loopback URI without a port.
 2. Paste the Client ID into the admin window and press **Connect**. A browser
    opens for consent; the token is stored in your user config directory with
    `0600` permissions and refreshed automatically.

@@ -182,11 +182,12 @@ func (a *App) startup(ctx context.Context) {
 
 	a.local = local.New(cfg.Local.Folders)
 	a.spotify = spotify.New(spotify.Options{
-		ClientID:    cfg.Spotify.ClientID,
-		DeviceID:    cfg.Spotify.DeviceID,
-		Token:       token,
-		SaveToken:   a.saveSpotifyToken,
-		OpenBrowser: func(u string) error { runtime.BrowserOpenURL(ctx, u); return nil },
+		ClientID:     cfg.Spotify.ClientID,
+		DeviceID:     cfg.Spotify.DeviceID,
+		CallbackPort: cfg.Spotify.CallbackPort,
+		Token:        token,
+		SaveToken:    a.saveSpotifyToken,
+		OpenBrowser:  func(u string) error { runtime.BrowserOpenURL(ctx, u); return nil },
 	})
 	ytKey, err := config.LoadYouTubeKey()
 	if err != nil {
@@ -359,6 +360,9 @@ func (a *App) SaveConfig(c config.Config) error {
 	if c.Local.Folders == nil {
 		c.Local.Folders = []string{}
 	}
+	if c.Spotify.CallbackPort <= 0 {
+		c.Spotify.CallbackPort = config.DefaultSpotifyCallbackPort
+	}
 	a.mu.Lock()
 	c.InviteOnly = a.cfg.InviteOnly
 	a.cfg = c
@@ -369,6 +373,7 @@ func (a *App) SaveConfig(c config.Config) error {
 	a.local.SetFolders(c.Local.Folders)
 	a.spotify.SetClientID(c.Spotify.ClientID)
 	a.spotify.SetDeviceID(c.Spotify.DeviceID)
+	a.spotify.SetCallbackPort(c.Spotify.CallbackPort)
 	a.player.SetSkipRatio(c.SkipRatio)
 	return nil
 }
@@ -450,6 +455,9 @@ func (a *App) PickFolder() (string, error) {
 func (a *App) SpotifyConnect() error { return uiError(a.spotify.Connect(a.ctx)) }
 
 func (a *App) SpotifyDisconnect() { a.spotify.Disconnect() }
+
+// SpotifyRedirectURI is the exact URI to register in the Spotify dashboard.
+func (a *App) SpotifyRedirectURI() string { return a.spotify.RedirectURI() }
 
 // SpotifyCancelConnect aborts a pending Connect (the admin closed the browser tab).
 func (a *App) SpotifyCancelConnect() { a.spotify.CancelConnect() }

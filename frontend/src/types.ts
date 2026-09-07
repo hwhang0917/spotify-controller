@@ -5,7 +5,7 @@ export interface Config {
   skipRatio: number
   inviteOnly: boolean
   local: { folders: string[] }
-  spotify: { clientId: string; deviceId?: string }
+  spotify: { clientId: string; deviceId?: string; callbackPort: number }
   youtube: { hasKey: boolean }
 }
 

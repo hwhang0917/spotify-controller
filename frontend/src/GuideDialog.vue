@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { BrowserOpenURL } from '../wailsjs/runtime/runtime'
 import { t } from './i18n'
 
-const props = defineProps<{ prefix: string; steps: number; links?: Record<number, string>; note?: string }>()
+const props = defineProps<{ prefix: string; steps: number; links?: Record<number, string>; note?: string; vars?: Record<string, string | number> }>()
 const stepKeys = Array.from({ length: props.steps }, (_, i) => i + 1)
 </script>
 
@@ -28,14 +28,14 @@ const stepKeys = Array.from({ length: props.steps }, (_, i) => i + 1)
         <li v-for="n in stepKeys" :key="n" class="flex gap-3">
           <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary font-mono text-xs text-primary-foreground">{{ n }}</span>
           <div class="min-w-0 flex-1 space-y-1.5 pt-0.5">
-            <p class="whitespace-pre-line break-keep">{{ t(`${prefix}.step${n}`) }}</p>
+            <p class="whitespace-pre-line break-keep">{{ t(`${prefix}.step${n}`, vars) }}</p>
             <Button v-if="links?.[n]" variant="outline" size="sm" class="max-w-full" @click="BrowserOpenURL(links[n])">
               <ExternalLink /><span class="truncate">{{ links[n].replace(/^https?:\/\//, '') }}</span>
             </Button>
           </div>
         </li>
       </ol>
-      <p v-if="note" class="break-keep rounded-md border bg-muted px-4 py-3 text-sm leading-relaxed text-muted-foreground">{{ t(note) }}</p>
+      <p v-if="note" class="break-keep rounded-md border bg-muted px-4 py-3 text-sm leading-relaxed text-muted-foreground">{{ t(note, vars) }}</p>
     </DialogContent>
   </Dialog>
 </template>

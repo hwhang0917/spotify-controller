@@ -25,7 +25,7 @@ func TestLoadDefaultsThenRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Port != DefaultPort || !c.IsEnabled("local") || c.Local.Folders == nil || c.InviteOnly {
+	if c.Port != DefaultPort || !c.IsEnabled("local") || c.Local.Folders == nil || c.InviteOnly || c.Spotify.CallbackPort != DefaultSpotifyCallbackPort {
 		t.Fatalf("defaults: %+v", c)
 	}
 	if _, ok := kv[settingsKey]; !ok {

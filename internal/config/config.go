@@ -20,11 +20,14 @@ const EnvDir = "VIBE_MUSIC_DIR"
 const (
 	DefaultPort      = 5555
 	DefaultSkipRatio = 0.5
-	appDirName       = "vibe-music"
-	DBFile           = "vibe-music.db"
-	tokenFile        = "spotify-token.json"
-	youtubeKeyFile   = "youtube-api-key"
-	settingsKey      = "config"
+	// DefaultSpotifyCallbackPort: the dashboard requires the exact redirect URI
+	// including port, so the loopback callback listens on a fixed one.
+	DefaultSpotifyCallbackPort = 27272
+	appDirName                 = "vibe-music"
+	DBFile                     = "vibe-music.db"
+	tokenFile                  = "spotify-token.json"
+	youtubeKeyFile             = "youtube-api-key"
+	settingsKey                = "config"
 )
 
 type Config struct {
@@ -50,8 +53,9 @@ type Local struct {
 }
 
 type Spotify struct {
-	ClientID string `json:"clientId"`
-	DeviceID string `json:"deviceId,omitempty"`
+	ClientID     string `json:"clientId"`
+	DeviceID     string `json:"deviceId,omitempty"`
+	CallbackPort int    `json:"callbackPort"`
 }
 
 // KV is what config needs from the store.
@@ -71,6 +75,9 @@ func Default() Config {
 func (c *Config) normalize() {
 	if c.Local.Folders == nil {
 		c.Local.Folders = []string{}
+	}
+	if c.Spotify.CallbackPort <= 0 {
+		c.Spotify.CallbackPort = DefaultSpotifyCallbackPort
 	}
 	if c.Enabled == nil {
 		// nothing stored: pre-Enabled settings name a single active source,

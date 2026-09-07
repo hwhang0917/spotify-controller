@@ -50,6 +50,7 @@ var (
 	ErrNoDevice       = &source.CodedError{Kind: "spotify_no_device", Msg: noDeviceMessage}
 	ErrLoginTimeout   = &source.CodedError{Kind: "spotify_login_timeout", Msg: "spotify: login not completed"}
 	ErrLoginCancelled = &source.CodedError{Kind: "spotify_login_cancelled", Msg: "spotify: login cancelled"}
+	ErrCallbackPort   = &source.CodedError{Kind: "spotify_callback_port", Msg: "spotify: callback port is in use"}
 )
 
 // clientIDPattern: Spotify client IDs are 32 lowercase hex characters.
@@ -58,7 +59,10 @@ var clientIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 type Options struct {
 	ClientID string
 	DeviceID string
-	Token    *oauth2.Token
+	// CallbackPort is where the loopback redirect listens; 0 picks a free port
+	// (tests). The dashboard needs the registered URI to include this port.
+	CallbackPort int
+	Token        *oauth2.Token
 	// SaveToken is called whenever the token changes (PKCE rotates refresh
 	// tokens on every refresh; losing one kills the session within an hour).
 	SaveToken func(*oauth2.Token)
@@ -130,19 +134,33 @@ func (s *Source) SetClientID(id string) {
 	s.opts.ClientID = strings.TrimSpace(id)
 }
 
+func (s *Source) SetCallbackPort(port int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.opts.CallbackPort = port
+}
+
+// RedirectURI is what the host must register in the Spotify dashboard.
+func (s *Source) RedirectURI() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return fmt.Sprintf("http://127.0.0.1:%d%s", s.opts.CallbackPort, callbackPath)
+}
+
 func (s *Source) SetDeviceID(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.opts.DeviceID = id
 }
 
-// Connect runs the PKCE flow: loopback listener on an ephemeral port, browser
-// consent, code exchange. Blocks until done, cancelled, or timed out.
-// The host registers `http://127.0.0.1/callback` (no port) in their dashboard.
+// Connect runs the PKCE flow: loopback listener on the configured port,
+// browser consent, code exchange. Blocks until done, cancelled, or timed out.
+// The host registers RedirectURI() in their dashboard.
 func (s *Source) Connect(ctx context.Context) error {
 	s.mu.Lock()
 	clientID := s.opts.ClientID
 	open := s.opts.OpenBrowser
+	port := s.opts.CallbackPort
 	s.mu.Unlock()
 	if clientID == "" {
 		return ErrNoClientID
@@ -154,9 +172,9 @@ func (s *Source) Connect(ctx context.Context) error {
 		return errors.New("spotify: no browser opener configured")
 	}
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %v", ErrCallbackPort, err)
 	}
 	defer ln.Close()
 	redirect := fmt.Sprintf("http://%s%s", ln.Addr().String(), callbackPath)

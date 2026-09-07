@@ -33,3 +33,4 @@ export function YouTubeReport(arg1) { return app()['YouTubeReport'](arg1); }
 export function SetYouTubeAPIKey(arg1) { return app()['SetYouTubeAPIKey'](arg1); }
 export function SetSourceEnabled(arg1, arg2) { return app()['SetSourceEnabled'](arg1, arg2); }
 export function SpotifyCancelConnect() { return app()['SpotifyCancelConnect'](); }
+export function SpotifyRedirectURI() { return app()['SpotifyRedirectURI'](); }

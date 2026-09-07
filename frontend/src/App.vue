@@ -127,6 +127,7 @@ const onSeekCommit = (v: number[] | undefined) => {
 }
 const kick = (id: string) => run('kick', async () => { await api.KickGuest(id); return t('toast.guestKicked') })
 const removeGuest = (id: string) => run('remove', async () => { await api.RemoveGuest(id); return t('toast.guestRemoved') })
+const redirectUri = computed(() => `http://127.0.0.1:${cfg.value?.spotify.callbackPort ?? 27272}/callback`)
 const youtubeKey = ref('')
 const saveYouTubeKey = () => run('yt-key', async () => {
   await api.SetYouTubeAPIKey(youtubeKey.value)
@@ -490,12 +491,21 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
 
             <Card>
               <CardHeader>
-                <CardTitle class="flex items-center gap-2"><SpotifyIcon />{{ t('spotify.title') }}<GuideDialog prefix="guide.spotify" :steps="5" :links="{ 1: 'https://developer.spotify.com/dashboard' }" note="guide.spotify.note" /></CardTitle>
+                <CardTitle class="flex items-center gap-2"><SpotifyIcon />{{ t('spotify.title') }}<GuideDialog prefix="guide.spotify" :steps="5" :links="{ 1: 'https://developer.spotify.com/dashboard' }" note="guide.spotify.note" :vars="{ uri: redirectUri }" /></CardTitle>
               </CardHeader>
               <CardContent class="space-y-4">
                 <div class="space-y-2">
                   <Label for="clientId">{{ t('spotify.clientId') }}</Label>
                   <Input id="clientId" v-model="cfg.spotify.clientId" class="font-mono text-xs" />
+                </div>
+                <div class="space-y-2">
+                  <Label for="cbPort">{{ t('spotify.callbackPort') }}</Label>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <Input id="cbPort" v-model.number="cfg.spotify.callbackPort" type="number" min="1024" max="65535" class="w-28 font-mono text-xs" @change="saveConfig" />
+                    <span class="select-all rounded-md border bg-muted px-2 py-1 font-mono text-xs">{{ redirectUri }}</span>
+                    <Button variant="outline" size="xs" @click="copyText(redirectUri)"><Copy />{{ t('spotify.copyUri') }}</Button>
+                  </div>
+                  <p class="text-xs text-muted-foreground">{{ t('spotify.callbackHint') }}</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
                   <template v-if="!isReady('spotify')">

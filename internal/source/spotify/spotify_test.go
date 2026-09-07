@@ -3,6 +3,7 @@ package spotify
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
 	"time"
 
@@ -124,5 +125,22 @@ func TestConnectRejectsBadClientIDAndCancels(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Connect did not return after cancel")
+	}
+}
+
+func TestRedirectURIAndBusyPort(t *testing.T) {
+	s := New(Options{ClientID: "0123456789abcdef0123456789abcdef", CallbackPort: 27272, OpenBrowser: func(string) error { return nil }})
+	if s.RedirectURI() != "http://127.0.0.1:27272/callback" {
+		t.Fatalf("redirect: %s", s.RedirectURI())
+	}
+	// occupy a port, then point Connect at it
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	s.SetCallbackPort(ln.Addr().(*net.TCPAddr).Port)
+	if err := s.Connect(context.Background()); !errors.Is(err, ErrCallbackPort) {
+		t.Fatalf("busy port: %v", err)
 	}
 }
