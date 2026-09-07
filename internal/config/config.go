@@ -28,14 +28,15 @@ const (
 )
 
 type Config struct {
-	Port         int     `json:"port"`
-	ActiveSource string  `json:"activeSource"`
-	SkipRatio    float64 `json:"skipRatio"`
-	InviteOnly   bool    `json:"inviteOnly"`
-	// Disabled lists source IDs the admin switched off. Absent = enabled.
-	Disabled []string `json:"disabled"`
-	Local    Local    `json:"local"`
-	Spotify  Spotify  `json:"spotify"`
+	Port       int     `json:"port"`
+	SkipRatio  float64 `json:"skipRatio"`
+	InviteOnly bool    `json:"inviteOnly"`
+	// Enabled lists the sources the admin switched on (Use).
+	Enabled []string `json:"enabled"`
+	// Kept only to migrate settings written before Enabled existed.
+	ActiveSource string  `json:"activeSource,omitempty"`
+	Local        Local   `json:"local"`
+	Spotify      Spotify `json:"spotify"`
 	// YouTube.HasKey is derived at read time; the key itself is in its own file.
 	YouTube YouTube `json:"youtube"`
 }
@@ -60,7 +61,7 @@ type KV interface {
 }
 
 func Default() Config {
-	c := Config{Port: DefaultPort, ActiveSource: "local", SkipRatio: DefaultSkipRatio}
+	c := Config{Port: DefaultPort, SkipRatio: DefaultSkipRatio}
 	c.normalize()
 	return c
 }
@@ -71,33 +72,39 @@ func (c *Config) normalize() {
 	if c.Local.Folders == nil {
 		c.Local.Folders = []string{}
 	}
-	if c.Disabled == nil {
-		c.Disabled = []string{}
+	if c.Enabled == nil {
+		// nothing stored: pre-Enabled settings name a single active source,
+		// otherwise start with local files
+		c.Enabled = []string{"local"}
+		if c.ActiveSource != "" {
+			c.Enabled = []string{c.ActiveSource}
+		}
 	}
+	c.ActiveSource = ""
 }
 
-// IsDisabled reports whether the admin switched a source off.
-func (c Config) IsDisabled(id string) bool {
-	for _, d := range c.Disabled {
-		if d == id {
+// IsEnabled reports whether the admin switched a source on.
+func (c Config) IsEnabled(id string) bool {
+	for _, e := range c.Enabled {
+		if e == id {
 			return true
 		}
 	}
 	return false
 }
 
-// SetDisabled adds or removes id from the disabled list.
-func (c *Config) SetDisabled(id string, disabled bool) {
-	kept := make([]string, 0, len(c.Disabled)+1)
-	for _, d := range c.Disabled {
-		if d != id {
-			kept = append(kept, d)
+// SetEnabled adds or removes id from the enabled list.
+func (c *Config) SetEnabled(id string, on bool) {
+	kept := make([]string, 0, len(c.Enabled)+1)
+	for _, e := range c.Enabled {
+		if e != id {
+			kept = append(kept, e)
 		}
 	}
-	if disabled {
+	if on {
 		kept = append(kept, id)
 	}
-	c.Disabled = kept
+	c.Enabled = kept
 }
 
 // Dir returns the data directory (created on demand).
@@ -121,6 +128,7 @@ func Load(kv KV) (Config, error) {
 		return c, Save(kv, c)
 	}
 	c := Default()
+	c.Enabled = nil // let the stored value (or the migration) decide
 	if err := json.Unmarshal(data, &c); err != nil {
 		return Config{}, fmt.Errorf("parse settings: %w", err)
 	}

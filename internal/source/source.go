@@ -11,6 +11,8 @@ import (
 
 // Track is one playable item as shown to guests.
 type Track struct {
+	// Source is the ID of the source that can play this track ("local", "spotify", "youtube").
+	Source string `json:"source"`
 	// ID is source-scoped and URL-safe (spotify: track ID; local: short hash of path).
 	ID       string        `json:"id"`
 	Title    string        `json:"title"`

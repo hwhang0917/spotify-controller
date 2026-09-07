@@ -132,9 +132,9 @@ func (s *Source) Rescan() (int, error) {
 	for _, p := range paths {
 		id := trackID(p)
 		t, pic := readTags(p)
-		t.ID = id
+		t.ID, t.Source = id, "local"
 		if pic != nil {
-			t.ArtworkURL = "/api/artwork/" + id
+			t.ArtworkURL = "/api/artwork/local/" + id
 		}
 		tracks = append(tracks, t)
 		byID[id] = &entry{path: p, picture: pic}
@@ -239,7 +239,7 @@ func (s *Source) trackLocked(id string) source.Track {
 			return t
 		}
 	}
-	return source.Track{ID: id}
+	return source.Track{ID: id, Source: "local"}
 }
 
 // gainFor maps 0..100% to beep's Gain, where output = sample * (1 + Gain).

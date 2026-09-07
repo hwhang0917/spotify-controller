@@ -21,6 +21,7 @@ import SpotifyIcon from './SpotifyIcon.vue'
 import YouTubePlayer from './YouTubePlayer.vue'
 import YouTubeIcon from './YouTubeIcon.vue'
 import HelpTip from './HelpTip.vue'
+import SourceIcon from './SourceIcon.vue'
 import { toast } from 'vue-sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { locale, setLocale, t, tError } from './i18n'
@@ -97,10 +98,6 @@ const toggleServer = () => run('server', async () => {
   const url = await api.StartServer(server.value.port)
   return t('toast.serverStarted', { url })
 }, { port: server.value.port })
-const useSource = (id: string) => run(id, async () => {
-  await api.SetActiveSource(id)
-  return t('toast.sourceSwitched', { name: sources.value.find((s) => s.id === id)?.name ?? id })
-})
 const rescan = () => run('rescan', async () => t('local.indexed', { n: await api.LocalRescan() }))
 const connect = () => run('connect', async () => {
   await api.SaveConfig(configToSave())
@@ -137,24 +134,32 @@ const saveYouTubeKey = () => run('yt-key', async () => {
   youtubeKey.value = ''
   return t(had ? 'toast.youtubeKeySaved' : 'toast.youtubeKeyCleared')
 })
-const isYouTube = computed(() => state.value?.source?.id === 'youtube')
+const youtubeEnabled = computed(() => sources.value.some((s) => s.id === 'youtube' && s.enabled))
+const playingSource = computed(() => np.value?.track.source ?? '')
+const playingSourceName = computed(() => sources.value.find((s) => s.id === playingSource.value)?.name ?? playingSource.value)
 
-// Enable/disable a source. Switching off the one that is playing or has a
-// queue asks first, because it stops playback and clears the queue.
-const pendingDisable = ref<SourceStatus | null>(null)
+// Enable/disable a source. Anything that would stop playback or drop queued
+// songs asks first: switching off a source in use, or an exclusivity flip
+// (Spotify on while others run, or another source on while Spotify runs).
+type Pending = { s: SourceStatus; on: boolean; kind: 'off' | 'exclusive-on' | 'exclusive-off' }
+const pending = ref<Pending | null>(null)
 const applyEnabled = (s: SourceStatus, on: boolean) => run('source-enabled', async () => {
   await api.SetSourceEnabled(s.id, on)
   return t(on ? 'toast.sourceEnabled' : 'toast.sourceDisabled', { name: s.name })
 })
+const inUse = (id: string) => np.value?.track.source === id || (state.value?.queue.some((it) => it.track.source === id) ?? false)
+const anyInUse = () => !!np.value || (state.value?.queue.length ?? 0) > 0
 function toggleEnabled(s: SourceStatus, on: boolean) {
-  const inUse = s.active && (state.value?.nowPlaying || (state.value?.queue.length ?? 0) > 0)
-  if (!on && inUse) pendingDisable.value = s
+  const others = sources.value.filter((o) => o.id !== s.id && o.enabled)
+  if (!on && inUse(s.id)) pending.value = { s, on, kind: 'off' }
+  else if (on && s.exclusive && others.length && anyInUse()) pending.value = { s, on, kind: 'exclusive-on' }
+  else if (on && !s.exclusive && others.some((o) => o.exclusive) && anyInUse()) pending.value = { s, on, kind: 'exclusive-off' }
   else applyEnabled(s, on)
 }
-function confirmDisable() {
-  const s = pendingDisable.value
-  pendingDisable.value = null
-  if (s) applyEnabled(s, false)
+function confirmPending() {
+  const p = pending.value
+  pending.value = null
+  if (p) applyEnabled(p.s, p.on)
 }
 const setInviteOnly = (on: boolean) => run('invite-only', async () => { await api.SetInviteOnly(on); return t(on ? 'toast.inviteOn' : 'toast.inviteOff') })
 const admit = (id: string) => run('admit', async () => { await api.AdmitGuest(id); return t('toast.guestAdmitted') })
@@ -248,14 +253,15 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
         <!-- Player -->
         <Card class="overflow-hidden self-start">
           <CardContent class="p-0">
-            <div class="flex flex-col" :class="isYouTube ? '' : 'sm:flex-row'">
-              <YouTubePlayer v-if="isYouTube">
+            <div class="flex flex-col" :class="playingSource === 'youtube' ? '' : 'sm:flex-row'">
+              <!-- mounted whenever YouTube is on so it is ready before its first track; visible only while one plays -->
+              <YouTubePlayer v-if="youtubeEnabled" v-show="playingSource === 'youtube'">
                 <template #blocked>{{ t('youtube.blocked') }}</template>
               </YouTubePlayer>
-              <Artwork v-else :src="np?.track.artworkUrl?.startsWith('http') ? np.track.artworkUrl : undefined" class="aspect-square w-full sm:w-64 rounded-none" />
+              <Artwork v-if="playingSource !== 'youtube'" :src="np?.track.artworkUrl?.startsWith('http') ? np.track.artworkUrl : undefined" class="aspect-square w-full sm:w-64 rounded-none" />
               <div class="flex flex-1 flex-col justify-between gap-5 px-8 py-6">
                 <div class="space-y-1">
-                  <p class="eyebrow">{{ t('now') }}<span v-if="state?.source"> · {{ state.source.name }}</span></p>
+                  <p class="eyebrow flex items-center gap-1.5">{{ t('now') }}<template v-if="np"> · <SourceIcon :source="playingSource" class="size-3" />{{ playingSourceName }}</template></p>
                   <template v-if="np">
                     <h2 class="text-2xl font-semibold tracking-tight leading-tight line-clamp-2">{{ np.track.title }}</h2>
                     <p class="text-base text-body truncate">{{ np.track.artist || '—' }}</p>
@@ -313,7 +319,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                   <Artwork :src="it.track.artworkUrl?.startsWith('http') ? it.track.artworkUrl : undefined" class="size-10" />
                   <div class="min-w-0 flex-1">
                     <p class="truncate font-medium">{{ it.track.title }}</p>
-                    <p class="truncate text-xs text-muted-foreground">{{ it.track.artist || '—' }} · {{ it.requestedBy }}</p>
+                    <p class="flex items-center gap-1 truncate text-xs text-muted-foreground"><SourceIcon :source="it.track.source" class="size-3" /><span class="truncate">{{ it.track.artist || '—' }} · {{ it.requestedBy }}</span></p>
                   </div>
                   <span class="font-mono text-xs text-muted-foreground tabular-nums">{{ fmtDuration(it.track.duration) }}</span>
                   <Badge variant="outline" class="font-mono tabular-nums"><ChevronUp />{{ it.votes }}</Badge>
@@ -424,7 +430,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
               <div
                 v-for="s in sources" :key="s.id"
                 class="rounded-lg border bg-card p-4 transition-colors"
-                :class="[s.active ? 'border-primary' : '', s.enabled ? '' : 'opacity-60']"
+                :class="[s.enabled ? 'border-primary' : '', s.enabled || s.wanted ? '' : 'opacity-60']"
               >
                 <div class="flex items-center justify-between gap-2">
                   <span class="flex min-w-0 items-center gap-2 font-medium">
@@ -433,28 +439,30 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                   </span>
                   <label class="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
                     {{ t('source.use') }}
-                    <Switch size="sm" :model-value="s.enabled" :disabled="!!busy" @update:model-value="(on: boolean) => toggleEnabled(s, on)" />
+                    <Switch size="sm" :model-value="s.enabled || s.wanted" :disabled="!!busy || (!s.enabled && !s.wanted && !s.ready)" @update:model-value="(on: boolean) => toggleEnabled(s, on)" />
                   </label>
                 </div>
                 <div class="mt-3 flex items-center justify-between gap-2">
-                  <Badge :variant="s.active ? 'default' : s.enabled && s.ready ? 'secondary' : 'outline'">
-                    {{ !s.enabled ? t('source.disabled') : s.active ? t('source.active') : s.ready ? t('source.ready') : t('source.setup') }}
+                  <Badge :variant="s.enabled ? 'default' : s.wanted ? 'destructive' : s.ready ? 'secondary' : 'outline'">
+                    {{ s.enabled ? t('source.on') : s.wanted ? t('source.failed') : s.ready ? t('source.ready') : t('source.setup') }}
                   </Badge>
-                  <Button v-if="!s.active" size="sm" variant="outline" :disabled="!s.enabled || !s.ready || !!busy" @click="useSource(s.id)">{{ t('source.useNow') }}</Button>
+                  <span v-if="s.exclusive" class="text-xs text-muted-foreground">{{ t('source.exclusive') }}</span>
                 </div>
                 <p class="mt-2 truncate text-xs text-muted-foreground">{{ s.detail }}</p>
               </div>
             </div>
 
-            <AlertDialog :open="!!pendingDisable" @update:open="(o: boolean) => { if (!o) pendingDisable = null }">
+            <AlertDialog :open="!!pending" @update:open="(o: boolean) => { if (!o) pending = null }">
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>{{ t('source.disableTitle', { name: pendingDisable?.name ?? '' }) }}</AlertDialogTitle>
-                  <AlertDialogDescription>{{ t('source.disableBody') }}</AlertDialogDescription>
+                  <AlertDialogTitle>{{ t(pending?.kind === 'off' ? 'source.disableTitle' : 'source.switchTitle', { name: pending?.s.name ?? '' }) }}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {{ t(pending?.kind === 'off' ? 'source.disableBody' : pending?.kind === 'exclusive-on' ? 'source.exclusiveOnBody' : 'source.exclusiveOffBody', { name: pending?.s.name ?? '' }) }}
+                  </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>{{ t('source.cancel') }}</AlertDialogCancel>
-                  <AlertDialogAction @click="confirmDisable">{{ t('source.disableConfirm') }}</AlertDialogAction>
+                  <AlertDialogAction @click="confirmPending">{{ t(pending?.kind === 'off' ? 'source.disableConfirm' : 'source.switchConfirm') }}</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>

@@ -1,7 +1,7 @@
 // Mirrors the JSON shapes in app.go, internal/config and internal/player.
 export interface Config {
   port: number
-  activeSource: string
+  enabled: string[]
   skipRatio: number
   inviteOnly: boolean
   local: { folders: string[] }
@@ -12,8 +12,9 @@ export interface Config {
 export interface SourceStatus {
   id: string
   name: string
-  active: boolean
   enabled: boolean
+  wanted: boolean
+  exclusive: boolean
   ready: boolean
   detail: string
 }
@@ -26,6 +27,7 @@ export interface Device {
 }
 
 export interface Track {
+  source: string
   id: string
   title: string
   artist: string
@@ -44,7 +46,7 @@ export interface QueueItem {
 }
 
 export interface State {
-  source: { id: string; name: string } | null
+  sources: { id: string; name: string; enabled: boolean; exclusive: boolean }[]
   nowPlaying: {
     track: Track
     playing: boolean

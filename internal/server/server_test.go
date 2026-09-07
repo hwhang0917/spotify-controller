@@ -41,7 +41,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *fake.Source, *Guests) {
 		source.Track{ID: "b", Title: "Beta", Artist: "Y"},
 	)
 	p := player.New(player.Options{Sources: []source.Source{f}})
-	if err := p.SetSource(context.Background(), "fake"); err != nil {
+	if err := p.SetEnabled(context.Background(), "fake", true); err != nil {
 		t.Fatal(err)
 	}
 	guests := newGuests(t, nil)
@@ -112,7 +112,7 @@ func TestGuestFlow(t *testing.T) {
 	if res.StatusCode != 200 || me["id"] == "" || me["name"] != "" {
 		t.Fatalf("me: %d %v", res.StatusCode, me)
 	}
-	res, _ = kim.do("POST", "/api/queue", `{"id":"a"}`)
+	res, _ = kim.do("POST", "/api/queue", `{"id":"a","source":"fake"}`)
 	if res.StatusCode != 400 {
 		t.Fatalf("request without name: %d", res.StatusCode)
 	}
@@ -138,13 +138,19 @@ func TestGuestFlow(t *testing.T) {
 
 	// search goes through the player, never straight to the source
 	res, _ = kim.do("GET", "/api/search?q=alp", "")
+	if r, out := kim.do("GET", "/api/search?q=alp&source=nope", ""); r.StatusCode != 502 || out["error"] != "no_source" {
+		t.Fatalf("unknown source: %d %v", r.StatusCode, out)
+	}
+	if r, out := kim.do("POST", "/api/queue", `{"id":"a","source":"nope"}`); r.StatusCode != 409 || out["error"] != "no_source" {
+		t.Fatalf("request for a disabled source: %d %v", r.StatusCode, out)
+	}
 	if res.StatusCode != 200 || f.Calls[len(f.Calls)-1] != "search:alp" {
 		t.Fatalf("search: %d %v", res.StatusCode, f.Calls)
 	}
 
 	// first request plays, second queues with requester name
-	kim.do("POST", "/api/queue", `{"id":"a","title":"Alpha"}`)
-	res, st := lee.do("POST", "/api/queue", `{"id":"b","title":"Beta"}`)
+	kim.do("POST", "/api/queue", `{"id":"a","title":"Alpha","source":"fake"}`)
+	res, st := lee.do("POST", "/api/queue", `{"id":"b","title":"Beta","source":"fake"}`)
 	if res.StatusCode != 200 {
 		t.Fatalf("request: %d", res.StatusCode)
 	}
@@ -177,7 +183,7 @@ func TestGuestFlow(t *testing.T) {
 	if res, st := lee.do("DELETE", "/api/queue/"+itemID, ""); res.StatusCode != 200 || len(st["queue"].([]any)) != 0 {
 		t.Fatalf("lee removing own: %d %v", res.StatusCode, st["queue"])
 	}
-	_, st = lee.do("POST", "/api/queue", `{"id":"b","title":"Beta"}`)
+	_, st = lee.do("POST", "/api/queue", `{"id":"b","title":"Beta","source":"fake"}`)
 	queue = st["queue"].([]any)
 	itemID = queue[0].(map[string]any)["id"].(string)
 
@@ -201,7 +207,7 @@ func TestGuestFlow(t *testing.T) {
 	}
 
 	// artwork: fake is not an ArtworkProvider
-	res, _ = kim.do("GET", "/api/artwork/a", "")
+	res, _ = kim.do("GET", "/api/artwork/fake/a", "")
 	if res.StatusCode != 404 {
 		t.Fatalf("artwork: %d", res.StatusCode)
 	}
@@ -274,7 +280,7 @@ func TestBlockAndKick(t *testing.T) {
 	guests := newGuests(t, func() { changes++ })
 	f := fake.New(source.Track{ID: "a", Title: "Alpha"})
 	p := player.New(player.Options{Sources: []source.Source{f}})
-	p.SetSource(context.Background(), "fake")
+	p.SetEnabled(context.Background(), "fake", true)
 	ts := httptest.NewServer(NewHandler(dist, p, guests, nil))
 	defer ts.Close()
 
@@ -310,7 +316,7 @@ func TestBlockAndKick(t *testing.T) {
 
 	// block: every API call is 403 with a code the UI understands
 	guests.SetBlocked(id, true)
-	r, out := kim.do("POST", "/api/queue", `{"id":"a"}`)
+	r, out := kim.do("POST", "/api/queue", `{"id":"a","source":"fake"}`)
 	if r.StatusCode != 403 || out["error"] != "blocked" {
 		t.Fatalf("blocked: %d %v", r.StatusCode, out)
 	}

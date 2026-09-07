@@ -49,7 +49,6 @@ const (
 	errSpotifyNoID   = "spotify_client_id"
 	errSpotifyNoDev  = "spotify_no_device"
 	errSpotifyLogin  = "spotify_login_timeout"
-	errSourceOff     = "source_disabled"
 )
 
 // Winsock reports its own errno values; Go's syscall.EADDRINUSE/EACCES are
@@ -131,12 +130,13 @@ type ServerStatus struct {
 
 // SourceStatus is one row in the admin's source picker.
 type SourceStatus struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Active  bool   `json:"active"`
-	Enabled bool   `json:"enabled"`
-	Ready   bool   `json:"ready"`
-	Detail  string `json:"detail"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Enabled   bool   `json:"enabled"`   // switched on and activated
+	Wanted    bool   `json:"wanted"`    // switched on in config (may have failed to activate)
+	Exclusive bool   `json:"exclusive"` // Spotify: cannot run beside other sources
+	Ready     bool   `json:"ready"`     // configured enough to be switched on
+	Detail    string `json:"detail"`
 }
 
 func NewApp() *App { return &App{} }
@@ -209,10 +209,10 @@ func (a *App) startup(ctx context.Context) {
 	go a.player.Run(runCtx)
 	go a.forwardState(runCtx)
 
-	if cfg.IsDisabled(cfg.ActiveSource) {
-		log.Println("activate: source", cfg.ActiveSource, "is disabled")
-	} else if err := a.player.SetSource(runCtx, cfg.ActiveSource); err != nil {
-		log.Println("activate", cfg.ActiveSource+":", err)
+	for _, id := range cfg.Enabled {
+		if err := a.player.SetEnabled(runCtx, id, true); err != nil {
+			log.Println("enable", id+":", err) // stays enabled in config; shows as not ready
+		}
 	}
 }
 
@@ -221,8 +221,10 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.cancel != nil {
 		a.cancel()
 	}
-	if src := a.player.ActiveSource(); src != nil {
-		_ = src.Deactivate(ctx)
+	for _, id := range a.player.EnabledIDs() {
+		if src, ok := a.player.Source(id); ok {
+			_ = src.Deactivate(ctx)
+		}
 	}
 	if a.db != nil {
 		_ = a.db.Close()
@@ -333,11 +335,10 @@ func (a *App) SaveConfig(c config.Config) error {
 // --- sources ---
 
 func (a *App) Sources() []SourceStatus {
-	active := a.player.ActiveSource()
 	cfg := a.GetConfig()
-	out := make([]SourceStatus, 0, 2)
+	out := make([]SourceStatus, 0, 3)
 	for _, info := range a.player.Sources() {
-		st := SourceStatus{ID: info.ID, Name: info.Name, Active: active != nil && active.ID() == info.ID, Enabled: !cfg.IsDisabled(info.ID)}
+		st := SourceStatus{ID: info.ID, Name: info.Name, Enabled: info.Enabled, Wanted: cfg.IsEnabled(info.ID), Exclusive: info.Exclusive}
 		switch info.ID {
 		case a.local.ID():
 			st.Ready = len(cfg.Local.Folders) > 0
@@ -362,43 +363,30 @@ func (a *App) Sources() []SourceStatus {
 	return out
 }
 
-// SetActiveSource switches backends and remembers the choice.
-func (a *App) SetActiveSource(id string) error {
-	if a.GetConfig().IsDisabled(id) {
-		return codeErr(errSourceOff, "")
-	}
-	if err := a.player.SetSource(a.ctx, id); err != nil {
-		return uiError(err)
-	}
-	a.mu.Lock()
-	a.cfg.ActiveSource = id
-	a.mu.Unlock()
-	return a.saveConfig()
-}
-
-// SetSourceEnabled switches a source on or off. Disabling the active source
-// stops playback and clears the queue (the UI confirms first).
+// SetSourceEnabled switches a source on or off and remembers it. Turning on an
+// exclusive source (Spotify) turns every other source off first, and turning
+// on any source while Spotify is on turns Spotify off; the UI confirms both.
+// Turning a source off stops it if playing and drops its queued items.
 func (a *App) SetSourceEnabled(id string, enabled bool) error {
 	if _, ok := a.sourceByID(id); !ok {
 		return codeErr(errUnknownSource, id)
 	}
-	if !enabled {
-		if active := a.player.ActiveSource(); active != nil && active.ID() == id {
-			a.player.Deactivate(a.ctx)
+	if enabled {
+		for _, other := range a.player.EnabledIDs() {
+			if other != id && (player.ExclusiveSources[id] || player.ExclusiveSources[other]) {
+				if err := a.SetSourceEnabled(other, false); err != nil {
+					return err
+				}
+			}
 		}
 	}
+	if err := a.player.SetEnabled(a.ctx, id, enabled); err != nil {
+		return uiError(err)
+	}
 	a.mu.Lock()
-	a.cfg.SetDisabled(id, !enabled)
+	a.cfg.SetEnabled(id, enabled)
 	a.mu.Unlock()
-	if err := a.saveConfig(); err != nil {
-		return err
-	}
-	// Switching a source on while nothing plays makes it the active one, so
-	// guests are never left with "no active source" after a toggle.
-	if enabled && a.player.ActiveSource() == nil {
-		return a.SetActiveSource(id)
-	}
-	return nil
+	return a.saveConfig()
 }
 
 func (a *App) sourceByID(id string) (player.SourceInfo, bool) {

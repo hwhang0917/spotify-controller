@@ -242,6 +242,7 @@ func (s *Source) Search(ctx context.Context, query string, limit int) ([]source.
 	byID := map[string]source.Track{}
 	for _, v := range vr.Items {
 		t := source.Track{
+			Source:      "youtube",
 			ID:          v.ID,
 			Title:       v.Snippet.Title,
 			Artist:      v.Snippet.ChannelTitle,
@@ -336,7 +337,7 @@ func mapStatus(r Report, reportedAt time.Time, current string, playedAt time.Tim
 	}
 	t, ok := tracks[current]
 	if !ok {
-		t = source.Track{ID: current, ExternalURL: watchURL + current}
+		t = source.Track{Source: "youtube", ID: current, ExternalURL: watchURL + current}
 	}
 	pb.Track = &t
 	if r.VideoID != current || reportedAt.Before(playedAt) {

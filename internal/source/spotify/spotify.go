@@ -436,6 +436,7 @@ func mapTrack(ft *spotify.FullTrack) source.Track {
 		names = append(names, a.Name)
 	}
 	return source.Track{
+		Source:      "spotify",
 		ID:          string(ft.ID),
 		Title:       ft.Name,
 		Artist:      strings.Join(names, ", "),

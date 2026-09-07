@@ -89,7 +89,7 @@ func NewHandler(dist fs.FS, p *player.Player, guests *Guests, top TopFunc) http.
 			r.Post("/me", s.setMe)
 			r.Get("/search", s.search)
 			r.Get("/top", s.topTracks)
-			r.Get("/artwork/{id}", s.artwork)
+			r.Get("/artwork/{source}/{id}", s.artwork)
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireName)
 				r.Post("/queue", s.request)
@@ -276,7 +276,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, []source.Track{})
 		return
 	}
-	tracks, err := s.player.Search(r.Context(), q, searchLimit)
+	tracks, err := s.player.Search(r.Context(), r.URL.Query().Get("source"), q, searchLimit)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, source.ErrorCode(err, errSearchFailed))
 		return
@@ -287,14 +287,20 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tracks)
 }
 
-// topTracks lists the most played tracks of the active source.
+// topTracks lists the most played tracks of one enabled source (?source=;
+// defaults to the only enabled one).
 func (s *Server) topTracks(w http.ResponseWriter, r *http.Request) {
-	src := s.player.ActiveSource()
-	if src == nil || s.top == nil {
+	id := r.URL.Query().Get("source")
+	if id == "" {
+		if ids := s.player.EnabledIDs(); len(ids) == 1 {
+			id = ids[0]
+		}
+	}
+	if s.top == nil || !s.player.Enabled(id) {
 		writeJSON(w, http.StatusOK, []source.Track{})
 		return
 	}
-	tracks, err := s.top(src.ID(), topLimit)
+	tracks, err := s.top(id, topLimit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -343,7 +349,8 @@ func (s *Server) skip(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) artwork(w http.ResponseWriter, r *http.Request) {
-	ap, ok := s.player.ActiveSource().(source.ArtworkProvider)
+	src, _ := s.player.Source(chi.URLParam(r, "source"))
+	ap, ok := src.(source.ArtworkProvider)
 	if !ok {
 		http.NotFound(w, r)
 		return

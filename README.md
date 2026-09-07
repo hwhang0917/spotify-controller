@@ -25,9 +25,12 @@ host process.
 - **Core owns the queue.** Sorted by votes, then request time. The same song
   can be requested more than once. Skip happens when a configurable share of
   connected guests votes (default 50%). The admin can always skip.
-- **Sources are mutually exclusive.** One active at a time; switching stops
-  playback and clears the queue. Required by Spotify's policy against mixing
-  its content with other audio, and it keeps the code simple.
+- **Local files and YouTube mix; Spotify plays alone.** Each source has a Use
+  switch in the admin. With Local and YouTube on, guests pick a source per
+  search and the queue mixes them, the player switching source track by
+  track. Spotify's developer policy forbids mixing its content with other
+  audio, so turning Spotify on turns the others off (and vice versa), after a
+  confirmation whenever songs would be dropped.
 - **Spotify is a remote control.** Playback happens in the Spotify desktop
   client on the host. vibe-music only sends Web API player commands, so it is a
   non-streaming app. Guests never hold a token; the server searches and queues

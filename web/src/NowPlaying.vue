@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import Artwork from './Artwork.vue'
+import SourceIcon from './SourceIcon.vue'
 import SourceLink from './SourceLink.vue'
 import { t } from './i18n'
 import type { State } from './types'
@@ -21,6 +22,7 @@ onMounted(() => { tick = window.setInterval(() => { now.value = Date.now() }, 50
 onUnmounted(() => window.clearInterval(tick))
 
 const np = computed(() => props.state?.nowPlaying ?? null)
+const sourceName = computed(() => props.state?.sources.find((s) => s.id === np.value?.track.source)?.name ?? np.value?.track.source ?? '')
 const positionMs = computed(() => {
   if (!np.value) return 0
   const base = np.value.position / NS_PER_MS
@@ -41,8 +43,8 @@ const pct = computed(() => {
         <Artwork :src="np.track.artworkUrl" :alt="np.track.album" class="aspect-square w-full sm:w-56 rounded-none" />
         <div class="flex flex-1 flex-col justify-between gap-4 px-6 py-5 sm:px-8">
           <div class="space-y-1">
-            <p class="eyebrow">
-              {{ t('now.eyebrow') }}<span v-if="state?.source"> · {{ state.source.name }}</span>
+            <p class="eyebrow flex items-center gap-1.5">
+              {{ t('now.eyebrow') }}<template v-if="np"> · <SourceIcon :source="np.track.source" class="size-3" />{{ sourceName }}</template>
             </p>
             <h2 class="text-2xl font-semibold tracking-tight leading-tight line-clamp-2">{{ np.track.title }}</h2>
             <p class="text-base text-body truncate">{{ np.track.artist || '—' }}</p>
@@ -73,7 +75,7 @@ const pct = computed(() => {
       <div v-else class="flex flex-col sm:flex-row">
         <Artwork class="aspect-square w-full sm:w-56 rounded-none" />
         <div class="flex flex-1 flex-col justify-center gap-2 px-6 py-5 sm:px-8">
-          <p class="eyebrow">{{ t('now.eyebrow') }}<span v-if="state?.source"> · {{ state.source.name }}</span></p>
+          <p class="eyebrow">{{ t('now.eyebrow') }}</p>
           <p class="text-lg font-medium text-muted-foreground">{{ t('now.empty') }}</p>
         </div>
       </div>

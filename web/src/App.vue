@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ChevronUp, Plus, Search, Users, X } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import NowPlaying from './NowPlaying.vue'
 import TrackRow from './TrackRow.vue'
 import LocaleToggle from './LocaleToggle.vue'
+import SourceIcon from './SourceIcon.vue'
 import { toast } from 'vue-sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { t, tError } from './i18n'
@@ -29,9 +30,24 @@ const results = ref<Track[]>([])
 const searching = ref(false)
 const top = ref<Track[]>([])
 
-// Most played on the active source; refreshed when the source or track changes.
+// Source chips: guests search one enabled source at a time. The selection
+// follows what is enabled; disabled sources stay visible but inert.
+const sources = computed(() => state.value?.sources ?? [])
+const enabledSources = computed(() => sources.value.filter((s) => s.enabled))
+const chosen = ref('')
+const selected = computed(() => enabledSources.value.find((s) => s.id === chosen.value)?.id ?? enabledSources.value[0]?.id ?? '')
+const canSearch = computed(() => selected.value !== '')
+watch(selected, (id, prev) => { if (id !== prev) { results.value = []; loadTop() } })
+function pick(id: string) {
+  if (!enabledSources.value.some((s) => s.id === id)) return
+  chosen.value = id
+  if (query.value.trim()) onQuery()
+}
+
+// Most played on the selected source; refreshed when it or the track changes.
 async function loadTop() {
-  try { top.value = await api<Track[]>('GET', '/api/top') } catch { /* keep the old list */ }
+  if (!selected.value) { top.value = []; return }
+  try { top.value = await api<Track[]>('GET', `/api/top?source=${encodeURIComponent(selected.value)}`) } catch { /* keep the old list */ }
 }
 const error = ref('')
 const connected = ref(false)
@@ -111,7 +127,7 @@ function onQuery() {
   if (!q) { results.value = []; return }
   timer = window.setTimeout(() => act(async () => {
     searching.value = true
-    try { results.value = await api<Track[]>('GET', `/api/search?q=${encodeURIComponent(q)}`) }
+    try { results.value = await api<Track[]>('GET', `/api/search?q=${encodeURIComponent(q)}&source=${encodeURIComponent(selected.value)}`) }
     finally { searching.value = false }
   }), SEARCH_DEBOUNCE_MS)
 }
@@ -126,8 +142,8 @@ const vote = (id: string) => act(async () => { await api('POST', `/api/queue/${i
 const remove = (id: string) => act(async () => { await api('DELETE', `/api/queue/${id}`); return t('toast.removed') })
 const voteSkip = () => act(async () => { await api('POST', '/api/skip'); return t('toast.skipVoted') })
 
-const isSpotify = computed(() => state.value?.source?.id === 'spotify')
-const isYouTube = computed(() => state.value?.source?.id === 'youtube')
+const isSpotify = computed(() => enabledSources.value.some((s) => s.id === 'spotify'))
+const isYouTube = computed(() => enabledSources.value.some((s) => s.id === 'youtube'))
 
 let es: EventSource | null = null
 onMounted(async () => {
@@ -141,7 +157,7 @@ onMounted(async () => {
   es = new EventSource('/api/events')
   es.addEventListener('state', (e) => {
     const s: State = JSON.parse((e as MessageEvent).data)
-    const changed = s.source?.id !== state.value?.source?.id || s.nowPlaying?.track.id !== state.value?.nowPlaying?.track.id
+    const changed = s.nowPlaying?.track.id !== state.value?.nowPlaying?.track.id
     state.value = s
     announce(s.event)
     if (changed) loadTop()
@@ -233,9 +249,20 @@ onUnmounted(() => { es?.close(); window.clearInterval(health) })
       <Card>
         <CardHeader>
           <p class="eyebrow">{{ t('search.eyebrow') }}</p>
+          <div class="flex flex-wrap gap-1.5" role="tablist">
+            <Button
+              v-for="s in sources" :key="s.id" size="xs"
+              :variant="s.id === selected ? 'default' : 'outline'"
+              :disabled="!s.enabled" :title="s.enabled ? s.name : t('search.sourceOff', { name: s.name })"
+              role="tab" :aria-selected="s.id === selected"
+              @click="pick(s.id)"
+            >
+              <SourceIcon :source="s.id" class="size-3" />{{ s.name }}
+            </Button>
+          </div>
           <div class="relative">
             <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input v-model="query" class="pl-8" :placeholder="t('search.placeholder')" @input="onQuery" />
+            <Input v-model="query" class="pl-8" :disabled="!canSearch" :placeholder="canSearch ? t('search.placeholder') : t('search.noSource')" @input="onQuery" />
           </div>
         </CardHeader>
         <CardContent>

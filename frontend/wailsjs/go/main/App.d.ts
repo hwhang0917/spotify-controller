@@ -3,7 +3,6 @@
 export function GetConfig(): Promise<any>;
 export function SaveConfig(arg1: any): Promise<void>;
 export function Sources(): Promise<any[]>;
-export function SetActiveSource(arg1: string): Promise<void>;
 export function LocalRescan(): Promise<number>;
 export function SpotifyConnect(): Promise<void>;
 export function SpotifyDisconnect(): Promise<void>;

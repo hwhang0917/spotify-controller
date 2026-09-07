@@ -25,7 +25,7 @@ func TestLoadDefaultsThenRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Port != DefaultPort || c.ActiveSource != "local" || c.Local.Folders == nil || c.InviteOnly {
+	if c.Port != DefaultPort || !c.IsEnabled("local") || c.Local.Folders == nil || c.InviteOnly {
 		t.Fatalf("defaults: %+v", c)
 	}
 	if _, ok := kv[settingsKey]; !ok {
@@ -95,19 +95,25 @@ func TestYouTubeKeyFile(t *testing.T) {
 	}
 }
 
-func TestDisabledSources(t *testing.T) {
+func TestEnabledSourcesAndMigration(t *testing.T) {
 	c := Default()
-	if c.Disabled == nil || c.IsDisabled("spotify") {
+	if !c.IsEnabled("local") || c.IsEnabled("spotify") {
 		t.Fatalf("defaults: %+v", c)
 	}
-	c.SetDisabled("spotify", true)
-	c.SetDisabled("spotify", true)
-	c.SetDisabled("youtube", true)
-	if !c.IsDisabled("spotify") || len(c.Disabled) != 2 {
-		t.Fatalf("set: %v", c.Disabled)
+	c.SetEnabled("spotify", true)
+	c.SetEnabled("spotify", true)
+	c.SetEnabled("local", false)
+	if c.IsEnabled("local") || !c.IsEnabled("spotify") || len(c.Enabled) != 1 {
+		t.Fatalf("set: %v", c.Enabled)
 	}
-	c.SetDisabled("spotify", false)
-	if c.IsDisabled("spotify") || !c.IsDisabled("youtube") {
-		t.Fatalf("unset: %v", c.Disabled)
+	// settings written before Enabled existed: activeSource becomes the enabled one
+	kv := mapKV{settingsKey: []byte(`{"activeSource":"spotify"}`)}
+	m, err := Load(kv)
+	if err != nil || !m.IsEnabled("spotify") || m.IsEnabled("local") || m.ActiveSource != "" {
+		t.Fatalf("migration: %+v %v", m, err)
+	}
+	kv = mapKV{settingsKey: []byte(`{"enabled":[]}`)}
+	if m, _ := Load(kv); len(m.Enabled) != 0 {
+		t.Fatalf("explicit empty stays empty: %+v", m)
 	}
 }

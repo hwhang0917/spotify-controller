@@ -11,9 +11,9 @@ import (
 )
 
 var (
-	a  = source.Track{ID: "a", Title: "A"}
-	b  = source.Track{ID: "b", Title: "B"}
-	c  = source.Track{ID: "c", Title: "C"}
+	a  = source.Track{ID: "a", Title: "A", Source: "fake"}
+	b  = source.Track{ID: "b", Title: "B", Source: "fake"}
+	c  = source.Track{ID: "c", Title: "C", Source: "fake"}
 	g1 = Guest{ID: "g1", Name: "Kim"}
 	g2 = Guest{ID: "g2", Name: "Lee"}
 	g3 = Guest{ID: "g3", Name: "Park"}
@@ -23,7 +23,7 @@ func setup(t *testing.T) (*Player, *fake.Source) {
 	t.Helper()
 	f := fake.New(a, b, c)
 	p := New(Options{Sources: []source.Source{f}})
-	if err := p.SetSource(context.Background(), "fake"); err != nil {
+	if err := p.SetEnabled(context.Background(), "fake", true); err != nil {
 		t.Fatal(err)
 	}
 	return p, f
@@ -152,29 +152,75 @@ func TestSkipThreshold(t *testing.T) {
 	}
 }
 
-func TestSetSourceClearsQueueAndDeactivatesFirst(t *testing.T) {
+func TestMixedSourcesSwitchPerTrack(t *testing.T) {
 	f1 := fake.New(a, b)
-	f2 := &named{fake.New(c), "two"}
+	f2 := fake.New(c).WithID("two")
 	p := New(Options{Sources: []source.Source{f1, f2}})
 	ctx := context.Background()
-	_ = p.SetSource(ctx, "fake")
-	_ = p.Request(ctx, a, g1)
-	_ = p.Request(ctx, b, g1)
-	if err := p.SetSource(ctx, "two"); err != nil {
+	if err := p.SetEnabled(ctx, "fake", true); err != nil {
 		t.Fatal(err)
 	}
-	s := p.State()
-	if len(s.Queue) != 0 || s.NowPlaying != nil || s.Source.ID != "two" {
-		t.Fatalf("state after switch: %+v", s)
+	if err := p.SetEnabled(ctx, "two", true); err != nil {
+		t.Fatal(err)
 	}
-	if f1.Calls[len(f1.Calls)-1] != "deactivate" {
-		t.Fatalf("f1 calls: %v", f1.Calls)
+	c2 := f2.Library[0]
+	_ = p.Request(ctx, a, g1)  // plays on f1
+	_ = p.Request(ctx, c2, g2) // queued, lives on f2
+	f1.FinishTrack()
+	p.Tick(ctx)
+	eq(t, f2.Played(), []string{"c"})
+	if f1.Calls[len(f1.Calls)-1] != "stop" {
+		t.Fatalf("f1 should be stopped before f2 plays: %v", f1.Calls)
 	}
-	if f2.Calls[0] != "activate" {
-		t.Fatalf("f2 calls: %v", f2.Calls)
+	if got := p.State().NowPlaying.Track.Source; got != "two" {
+		t.Fatalf("now playing source = %q", got)
 	}
-	if err := p.SetSource(ctx, "nope"); err == nil {
+
+	// disabling the playing source stops it, drops only its items, announces
+	_ = p.Request(ctx, b, g1)
+	_ = p.Request(ctx, c2, g1)
+	ch, cancel := p.Subscribe()
+	defer cancel()
+	<-ch
+	if err := p.SetEnabled(ctx, "two", false); err != nil {
+		t.Fatal(err)
+	}
+	s := <-ch
+	if s.NowPlaying != nil || len(s.Queue) != 1 || s.Queue[0].Track.ID != "b" {
+		t.Fatalf("after disable: %+v", s)
+	}
+	if s.Event == nil || s.Event.Type != "source_disabled" {
+		t.Fatalf("event: %+v", s.Event)
+	}
+	if err := p.Request(ctx, c2, g1); err != ErrNoSource {
+		t.Fatalf("request for a disabled source: %v", err)
+	}
+	// the remaining head starts on the next tick
+	p.Tick(ctx)
+	eq(t, f1.Played(), []string{"a", "b"})
+	if err := p.SetEnabled(ctx, "nope", true); err == nil {
 		t.Fatal("unknown source should error")
+	}
+}
+
+func TestExclusiveSource(t *testing.T) {
+	f1 := fake.New(a)
+	sp := fake.New(c).WithID("spotify")
+	p := New(Options{Sources: []source.Source{f1, sp}})
+	ctx := context.Background()
+	_ = p.SetEnabled(ctx, "fake", true)
+	if err := p.SetEnabled(ctx, "spotify", true); err != ErrExclusive {
+		t.Fatalf("spotify next to another source: %v", err)
+	}
+	_ = p.SetEnabled(ctx, "fake", false)
+	if err := p.SetEnabled(ctx, "spotify", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.SetEnabled(ctx, "fake", true); err != ErrExclusive {
+		t.Fatalf("another source next to spotify: %v", err)
+	}
+	if _, err := p.Search(ctx, "", "x", 5); err != nil {
+		t.Fatalf("single enabled source is the default for search: %v", err)
 	}
 }
 
@@ -303,8 +349,8 @@ func TestMoveRanksAndVotesBelow(t *testing.T) {
 	_ = p.Vote(bID, g3.ID)
 	eq(t, queueIDs(p.State()), []string{"c", "b"})
 	// ...but new unranked requests sort by votes below them
-	d := source.Track{ID: "d", Title: "D"}
-	e := source.Track{ID: "e", Title: "E"}
+	d := source.Track{ID: "d", Title: "D", Source: "fake"}
+	e := source.Track{ID: "e", Title: "E", Source: "fake"}
 	_ = p.Request(ctx, d, g1)
 	_ = p.Request(ctx, e, g1)
 	_ = p.Vote(p.State().Queue[3].ID, g2.ID) // e gets a second vote
@@ -378,7 +424,7 @@ func TestPersistAndRestore(t *testing.T) {
 	// a fresh player restores the same order and votes
 	f2 := fake.New(a, b, c)
 	p2 := New(Options{Sources: []source.Source{f2}})
-	_ = p2.SetSource(ctx, "fake")
+	_ = p2.SetEnabled(ctx, "fake", true)
 	p2.Restore(last)
 	s := p2.State()
 	eq(t, queueIDs(s), []string{"c", "b"})
@@ -415,29 +461,4 @@ func TestPlayFailureKeepsHeadQueued(t *testing.T) {
 	if len(p.State().Queue) != 0 {
 		t.Fatal("head should be popped after a successful retry")
 	}
-}
-
-func TestDeactivateClearsEverythingAndAnnounces(t *testing.T) {
-	p, f := setup(t)
-	ctx := context.Background()
-	_ = p.Request(ctx, a, g1)
-	_ = p.Request(ctx, b, g2)
-	ch, cancel := p.Subscribe()
-	defer cancel()
-	<-ch
-	p.Deactivate(ctx)
-	s := <-ch
-	if s.Source != nil || s.NowPlaying != nil || len(s.Queue) != 0 {
-		t.Fatalf("state after deactivate: %+v", s)
-	}
-	if s.Event == nil || s.Event.Type != "source_disabled" || s.Event.Title != "Fake" {
-		t.Fatalf("event: %+v", s.Event)
-	}
-	if f.Calls[len(f.Calls)-1] != "deactivate" {
-		t.Fatalf("source not deactivated: %v", f.Calls)
-	}
-	if err := p.Request(ctx, a, g1); err == nil {
-		t.Fatal("requests must fail with no active source")
-	}
-	p.Deactivate(ctx) // idempotent
 }

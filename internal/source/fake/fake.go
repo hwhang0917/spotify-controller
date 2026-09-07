@@ -13,6 +13,7 @@ import (
 
 type Source struct {
 	mu       sync.Mutex
+	id       string
 	Library  []source.Track
 	Calls    []string // "activate", "play:<id>", "pause", ...
 	Current  *source.Track
@@ -23,9 +24,25 @@ type Source struct {
 	Err      error // returned from every method when set
 }
 
-func New(tracks ...source.Track) *Source { return &Source{Library: tracks, Volume: 100} }
+func New(tracks ...source.Track) *Source {
+	f := &Source{Volume: 100, id: "fake"}
+	for _, t := range tracks {
+		t.Source = f.id
+		f.Library = append(f.Library, t)
+	}
+	return f
+}
 
-func (f *Source) ID() string   { return "fake" }
+// WithID gives the fake a different source ID (for multi-source tests).
+func (f *Source) WithID(id string) *Source {
+	f.id = id
+	for i := range f.Library {
+		f.Library[i].Source = id
+	}
+	return f
+}
+
+func (f *Source) ID() string   { return f.id }
 func (f *Source) Name() string { return "Fake" }
 
 func (f *Source) log(s string) error {
@@ -77,7 +94,7 @@ func (f *Source) Play(_ context.Context, id string) error {
 			return nil
 		}
 	}
-	f.Current = &source.Track{ID: id}
+	f.Current = &source.Track{ID: id, Source: f.id}
 	f.Playing, f.Ended = true, false
 	return nil
 }

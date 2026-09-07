@@ -62,20 +62,26 @@ type NowPlaying struct {
 }
 
 type SourceInfo struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Enabled   bool   `json:"enabled"`
+	Exclusive bool   `json:"exclusive"` // when enabled, no other source may be
 }
+
+// ExclusiveSources cannot share a queue with other sources (Spotify's policy
+// forbids mixing its content with other audio).
+var ExclusiveSources = map[string]bool{"spotify": true}
 
 // State is the snapshot guests and the admin window render.
 type State struct {
-	Source        *SourceInfo `json:"source"`
-	NowPlaying    *NowPlaying `json:"nowPlaying"`
-	Queue         []QueueItem `json:"queue"`
-	SkipVotes     int         `json:"skipVotes"`
-	SkipThreshold int         `json:"skipThreshold"`
-	Volume        int         `json:"volume"`
-	Guests        int         `json:"guests"`
-	Event         *Event      `json:"event,omitempty"`
+	Sources       []SourceInfo `json:"sources"` // every source with its enabled flag
+	NowPlaying    *NowPlaying  `json:"nowPlaying"`
+	Queue         []QueueItem  `json:"queue"`
+	SkipVotes     int          `json:"skipVotes"`
+	SkipThreshold int          `json:"skipThreshold"`
+	Volume        int          `json:"volume"`
+	Guests        int          `json:"guests"`
+	Event         *Event       `json:"event,omitempty"`
 }
 
 type Options struct {
@@ -87,8 +93,9 @@ type Options struct {
 type Player struct {
 	mu        sync.Mutex
 	sources   map[string]source.Source
-	order     []SourceInfo
-	active    source.Source
+	order     []string
+	enabled   map[string]bool
+	current   source.Source // the one playing now
 	queue     []*QueueItem
 	now       source.Playback
 	requester string // display name of who requested the current track
@@ -109,6 +116,7 @@ type Player struct {
 func New(opts Options) *Player {
 	p := &Player{
 		sources:   map[string]source.Source{},
+		enabled:   map[string]bool{},
 		skipVotes: map[string]struct{}{},
 		subs:      map[chan State]struct{}{},
 		volume:    100,
@@ -123,7 +131,7 @@ func New(opts Options) *Player {
 	}
 	for _, s := range opts.Sources {
 		p.sources[s.ID()] = s
-		p.order = append(p.order, SourceInfo{ID: s.ID(), Name: s.Name()})
+		p.order = append(p.order, s.ID())
 	}
 	return p
 }
@@ -146,9 +154,16 @@ func (p *Player) Run(ctx context.Context) {
 // is a network call and must not stall guest requests.
 func (p *Player) Tick(ctx context.Context) {
 	p.mu.Lock()
-	src := p.active
+	src := p.current
 	p.mu.Unlock()
 	if src == nil {
+		// nothing has played yet (or the last source was switched off): start the head
+		p.mu.Lock()
+		if p.current == nil && len(p.queue) > 0 && time.Since(p.lastPlay) > playGrace {
+			p.advance(ctx)
+		}
+		p.broadcastIfChanged()
+		p.mu.Unlock()
 		return
 	}
 	st, err := src.Status(ctx)
@@ -159,7 +174,7 @@ func (p *Player) Tick(ctx context.Context) {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.active != src {
+	if p.current != src {
 		return // switched while we were polling
 	}
 	p.now = st
@@ -170,70 +185,125 @@ func (p *Player) Tick(ctx context.Context) {
 	p.broadcastIfChanged()
 }
 
-func (p *Player) Sources() []SourceInfo { return p.order }
-
-func (p *Player) ActiveSource() source.Source {
+// Sources lists every source with its enabled flag, in registration order.
+func (p *Player) Sources() []SourceInfo {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.active
+	return p.sourcesLocked()
 }
 
-// SetSource switches backends. Sources are mutually exclusive, so the queue and
-// votes are cleared and the old source is fully deactivated first.
-func (p *Player) SetSource(ctx context.Context, id string) error {
-	next, ok := p.sources[id]
+func (p *Player) sourcesLocked() []SourceInfo {
+	out := make([]SourceInfo, 0, len(p.order))
+	for _, id := range p.order {
+		out = append(out, SourceInfo{ID: id, Name: p.sources[id].Name(), Enabled: p.enabled[id], Exclusive: ExclusiveSources[id]})
+	}
+	return out
+}
+
+// Source returns a registered source by ID (enabled or not).
+func (p *Player) Source(id string) (source.Source, bool) {
+	s, ok := p.sources[id]
+	return s, ok
+}
+
+// Enabled reports whether guests may search and queue from a source.
+func (p *Player) Enabled(id string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.enabled[id]
+}
+
+// EnabledIDs returns the enabled sources in registration order.
+func (p *Player) EnabledIDs() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var out []string
+	for _, id := range p.order {
+		if p.enabled[id] {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// ErrExclusive is returned when enabling would put an exclusive source next to others.
+var ErrExclusive = &source.CodedError{Kind: "source_exclusive", Msg: "an exclusive source cannot be enabled alongside others"}
+
+// SetEnabled switches a source on (Activate) or off. Switching off stops it if
+// it is playing, drops its queued items, and announces the change. Exclusive
+// rules are enforced here; the admin UI turns the others off first.
+func (p *Player) SetEnabled(ctx context.Context, id string, on bool) error {
+	src, ok := p.sources[id]
 	if !ok {
 		return fmt.Errorf("unknown_source: %s", id)
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.active != nil {
-		if err := p.active.Deactivate(ctx); err != nil {
-			log.Println("player: deactivate:", err)
+	if on {
+		if p.enabled[id] {
+			return nil
+		}
+		for other, en := range p.enabled {
+			if en && (ExclusiveSources[id] || ExclusiveSources[other]) {
+				return ErrExclusive
+			}
+		}
+		if err := src.Activate(ctx); err != nil {
+			return err
+		}
+		_ = src.SetVolume(ctx, p.volume)
+		p.enabled[id] = true
+		p.broadcastIfChanged()
+		return nil
+	}
+	if !p.enabled[id] {
+		return nil
+	}
+	delete(p.enabled, id)
+	kept := p.queue[:0]
+	for _, it := range p.queue {
+		if it.Track.Source != id {
+			kept = append(kept, it)
 		}
 	}
-	p.active = nil
-	p.queue = nil
-	p.now = source.Playback{}
-	p.requester = ""
-	p.skipVotes = map[string]struct{}{}
-	if err := next.Activate(ctx); err != nil {
-		p.broadcastIfChanged()
-		return err
+	p.queue = kept
+	if p.current == src {
+		p.current = nil
+		p.now = source.Playback{}
+		p.requester = ""
+		p.skipVotes = map[string]struct{}{}
+		p.lastPlay = time.Time{} // nothing is loading: the next tick may start the new head at once
 	}
-	p.active = next
-	_ = next.SetVolume(ctx, p.volume)
-	p.broadcastIfChanged()
-	return nil
-}
-
-// Deactivate stops playback, clears the queue and leaves no source active.
-// Used when the admin switches the active source off. Announces it to guests.
-func (p *Player) Deactivate(ctx context.Context) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.active == nil {
-		return
-	}
-	name := p.active.Name()
-	if err := p.active.Deactivate(ctx); err != nil {
+	if err := src.Deactivate(ctx); err != nil {
 		log.Println("player: deactivate:", err)
 	}
-	p.active = nil
-	p.queue = nil
-	p.now = source.Playback{}
-	p.requester = ""
-	p.skipVotes = map[string]struct{}{}
-	p.pending = &Event{Type: "source_disabled", Title: name}
+	p.pending = &Event{Type: "source_disabled", Title: src.Name()}
 	p.broadcastIfChanged()
+	return nil
 }
 
 // ErrNoSource means the admin has not activated any source.
 var ErrNoSource = &source.CodedError{Kind: "no_source", Msg: "no active source"}
 
-func (p *Player) Search(ctx context.Context, q string, limit int) ([]source.Track, error) {
-	src := p.ActiveSource()
-	if src == nil {
+// Search queries one enabled source. An empty sourceID means the only enabled
+// one; with several enabled the caller must pick.
+func (p *Player) Search(ctx context.Context, sourceID, q string, limit int) ([]source.Track, error) {
+	p.mu.Lock()
+	if sourceID == "" {
+		var ids []string
+		for _, id := range p.order {
+			if p.enabled[id] {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) == 1 {
+			sourceID = ids[0]
+		}
+	}
+	src, ok := p.sources[sourceID]
+	enabled := p.enabled[sourceID]
+	p.mu.Unlock()
+	if !ok || !enabled {
 		return nil, ErrNoSource
 	}
 	return src.Search(ctx, q, limit)
@@ -244,7 +314,7 @@ func (p *Player) Search(ctx context.Context, q string, limit int) ([]source.Trac
 func (p *Player) Request(ctx context.Context, t source.Track, g Guest) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.active == nil {
+	if !p.enabled[t.Source] {
 		return ErrNoSource
 	}
 	p.queue = append(p.queue, &QueueItem{
@@ -352,13 +422,13 @@ func (p *Player) Move(itemID string, index int) error {
 func (p *Player) Seek(ctx context.Context, pos time.Duration) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.active == nil || p.now.Track == nil {
+	if p.current == nil || p.now.Track == nil {
 		return errors.New("nothing playing")
 	}
-	if err := p.active.Seek(ctx, pos); err != nil {
+	if err := p.current.Seek(ctx, pos); err != nil {
 		return err
 	}
-	if st, err := p.active.Status(ctx); err == nil {
+	if st, err := p.current.Status(ctx); err == nil {
 		p.now = st
 	} else {
 		p.now.Position, p.now.At = pos, time.Now()
@@ -390,19 +460,28 @@ func (p *Player) Resume(ctx context.Context) error {
 func (p *Player) SetVolume(ctx context.Context, pct int) error {
 	pct = max(0, min(100, pct))
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.volume = pct
-	p.mu.Unlock()
-	return p.control(func(s source.Source) error { return s.SetVolume(ctx, pct) })
+	var err error
+	for id, on := range p.enabled {
+		if on {
+			if e := p.sources[id].SetVolume(ctx, pct); e != nil {
+				err = e
+			}
+		}
+	}
+	p.broadcastIfChanged()
+	return err
 }
 
 func (p *Player) control(fn func(source.Source) error) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.active == nil {
-		return errors.New("no active source")
+	if p.current == nil {
+		return errors.New("nothing playing")
 	}
-	err := fn(p.active)
-	if st, serr := p.active.Status(context.Background()); serr == nil {
+	err := fn(p.current)
+	if st, serr := p.current.Status(context.Background()); serr == nil {
 		p.now = st
 	}
 	p.broadcastIfChanged()
@@ -540,29 +619,38 @@ func (p *Player) Subscribe() (<-chan State, func()) {
 
 // --- internals (caller holds p.mu) ---
 
-// advance plays the queue head or stops when the queue is empty.
+// advance plays the queue head (switching source if the head lives elsewhere)
+// or stops when the queue is empty.
 func (p *Player) advance(ctx context.Context) {
 	p.skipVotes = map[string]struct{}{}
-	if p.active == nil {
-		return
-	}
 	if len(p.queue) == 0 {
-		_ = p.active.Stop(ctx)
+		if p.current != nil {
+			_ = p.current.Stop(ctx)
+		}
 		p.now = source.Playback{At: time.Now()}
 		p.requester = ""
 		return
 	}
 	head := p.queue[0]
-	if err := p.active.Play(ctx, head.Track.ID); err != nil {
+	next, ok := p.sources[head.Track.Source]
+	if !ok || !p.enabled[head.Track.Source] {
+		p.queue = p.queue[1:] // orphaned by a disable race; drop it
+		return
+	}
+	if p.current != nil && p.current != next {
+		_ = p.current.Stop(ctx) // never overlap two sources
+	}
+	if err := next.Play(ctx, head.Track.ID); err != nil {
 		log.Println("player: play:", err) // head stays queued; the next tick retries
 		return
 	}
+	p.current = next
 	p.queue = p.queue[1:]
 	p.lastPlay = time.Now()
 	p.requester = head.RequestedByName
 	p.now = source.Playback{Track: &head.Track, Playing: true, At: p.lastPlay}
 	if p.onPlay != nil {
-		p.onPlay(p.active.ID(), head.Track)
+		p.onPlay(next.ID(), head.Track)
 	}
 }
 
@@ -594,9 +682,7 @@ func (p *Player) snapshot() State {
 		Volume:        p.volume,
 		Guests:        p.guests,
 	}
-	if p.active != nil {
-		s.Source = &SourceInfo{ID: p.active.ID(), Name: p.active.Name()}
-	}
+	s.Sources = p.sourcesLocked()
 	if p.now.Track != nil {
 		s.NowPlaying = &NowPlaying{
 			Track:       *p.now.Track,
@@ -618,7 +704,7 @@ func (p *Player) snapshot() State {
 // tick; clients interpolate from Position+At of the last frame. Duration is
 // included because local files only learn it once decoding starts.
 func (s State) signature() string {
-	sig := fmt.Sprintf("%v|%d|%d|%d|%d|", s.Source, s.SkipVotes, s.SkipThreshold, s.Volume, s.Guests)
+	sig := fmt.Sprintf("%v|%d|%d|%d|%d|", s.Sources, s.SkipVotes, s.SkipThreshold, s.Volume, s.Guests)
 	if s.NowPlaying != nil {
 		sig += fmt.Sprintf("%s|%v|%d|", s.NowPlaying.Track.ID, s.NowPlaying.Playing, s.NowPlaying.Track.Duration)
 	}

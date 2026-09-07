@@ -4,7 +4,6 @@ const app = () => window['go']['main']['App'];
 export function GetConfig() { return app()['GetConfig'](); }
 export function SaveConfig(arg1) { return app()['SaveConfig'](arg1); }
 export function Sources() { return app()['Sources'](); }
-export function SetActiveSource(arg1) { return app()['SetActiveSource'](arg1); }
 export function LocalRescan() { return app()['LocalRescan'](); }
 export function SpotifyConnect() { return app()['SpotifyConnect'](); }
 export function SpotifyDisconnect() { return app()['SpotifyDisconnect'](); }

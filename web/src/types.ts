@@ -1,5 +1,6 @@
 // Mirrors the JSON shapes served by internal/server and internal/player.
 export interface Track {
+  source: string
   id: string
   title: string
   artist: string
@@ -19,7 +20,7 @@ export interface QueueItem {
 }
 
 export interface State {
-  source: { id: string; name: string } | null
+  sources: { id: string; name: string; enabled: boolean; exclusive: boolean }[]
   nowPlaying: {
     track: Track
     playing: boolean
