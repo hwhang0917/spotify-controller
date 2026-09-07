@@ -9,9 +9,21 @@ Screens: a small admin window on the host, and a phone-friendly guest page.
 
 ## Get it
 
-Download `vibe-music.exe` from the
+**Windows:** download `vibe-music.exe` from the
 [Releases](https://github.com/hwhang0917/vibe-music/releases) page and run it.
 No installer, nothing else to install.
+
+**Linux (amd64) / macOS (Intel):**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/hwhang0917/vibe-music/master/scripts/install.sh | sh
+```
+
+Installs to `~/.local/bin/vibe-music` (Linux) or `~/Applications/vibe-music.app`
+(macOS); set `INSTALL_DIR` to change that, `VIBE_MUSIC_VERSION` to pin a
+release. On Linux the app needs WebKitGTK 4.1 at runtime
+(`libwebkit2gtk-4.1-0` on Debian/Ubuntu). Apple Silicon and ARM Linux are not
+built yet.
 
 Building it yourself, or hacking on it: see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
