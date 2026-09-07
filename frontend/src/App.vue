@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
@@ -312,7 +311,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
           </CardHeader>
           <CardContent class="p-0">
             <p v-if="!state?.queue.length" class="px-6 pb-6 text-sm text-muted-foreground">{{ t('queue.emptyAdmin') }}</p>
-            <ScrollArea v-else class="max-h-[28rem]">
+            <div v-else class="max-h-[28rem] overflow-y-auto">
               <ul class="divide-y">
                 <li v-for="(it, i) in state.queue" :key="it.id" class="flex items-center gap-3 px-6 py-2.5 text-sm">
                   <span class="w-5 text-right font-mono text-xs text-muted-foreground">{{ i + 1 }}</span>
@@ -335,7 +334,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                   </div>
                 </li>
               </ul>
-            </ScrollArea>
+            </div>
           </CardContent>
         </Card>
 

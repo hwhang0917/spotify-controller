@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import NowPlaying from './NowPlaying.vue'
@@ -17,8 +16,6 @@ import { Toaster } from '@/components/ui/sonner'
 import { t, tError } from './i18n'
 import { fmtDuration } from './types'
 import type { State, Track } from './types'
-
-const SEARCH_DEBOUNCE_MS = 300
 
 const name = ref('')
 const nameInput = ref('')
@@ -41,7 +38,7 @@ watch(selected, (id, prev) => { if (id !== prev) { results.value = []; loadTop()
 function pick(id: string) {
   if (!enabledSources.value.some((s) => s.id === id)) return
   chosen.value = id
-  if (query.value.trim()) onQuery()
+  if (query.value.trim()) search()
 }
 
 // Most played on the selected source; refreshed when it or the track changes.
@@ -120,16 +117,19 @@ const saveName = () => act(async () => {
   name.value = me.name
 })
 
-let timer: number | undefined
-function onQuery() {
-  window.clearTimeout(timer)
+// Search runs on Enter or the button, not on every keystroke: YouTube
+// searches cost quota and Spotify rate-limits per app.
+function search() {
   const q = query.value.trim()
-  if (!q) { results.value = []; return }
-  timer = window.setTimeout(() => act(async () => {
+  if (!q || !canSearch.value) { results.value = []; return }
+  act(async () => {
     searching.value = true
     try { results.value = await api<Track[]>('GET', `/api/search?q=${encodeURIComponent(q)}&source=${encodeURIComponent(selected.value)}`) }
     finally { searching.value = false }
-  }), SEARCH_DEBOUNCE_MS)
+  })
+}
+function onQuery() {
+  if (!query.value.trim()) results.value = []
 }
 
 const request = (tr: Track) => act(async () => {
@@ -260,10 +260,13 @@ onUnmounted(() => { es?.close(); window.clearInterval(health) })
               <SourceIcon :source="s.id" class="size-3" />{{ s.name }}
             </Button>
           </div>
-          <div class="relative">
-            <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input v-model="query" class="pl-8" :disabled="!canSearch" :placeholder="canSearch ? t('search.placeholder') : t('search.noSource')" @input="onQuery" />
-          </div>
+          <form class="flex gap-2" @submit.prevent="search">
+            <div class="relative flex-1">
+              <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input v-model="query" type="search" enterkeyhint="search" class="pl-8" :disabled="!canSearch" :placeholder="canSearch ? t('search.placeholder') : t('search.noSource')" @input="onQuery" />
+            </div>
+            <Button type="submit" :disabled="!canSearch || !query.trim() || searching">{{ t('search.go') }}</Button>
+          </form>
         </CardHeader>
         <CardContent>
           <div v-if="searching" class="space-y-3">
@@ -272,23 +275,23 @@ onUnmounted(() => { es?.close(); window.clearInterval(health) })
               <div class="flex-1 space-y-2"><Skeleton class="h-3 w-2/3" /><Skeleton class="h-3 w-1/3" /></div>
             </div>
           </div>
-          <ScrollArea v-else-if="results.length" class="max-h-96">
+          <div v-else-if="results.length" class="max-h-96 overflow-y-auto">
             <div class="divide-y">
               <TrackRow v-for="tr in results" :key="tr.id" :track="tr" :subtitle="tr.album">
                 <Button size="sm" @click="request(tr)"><Plus />{{ t('search.request') }}</Button>
               </TrackRow>
             </div>
-          </ScrollArea>
+          </div>
           <p v-else-if="query" class="text-sm text-muted-foreground">{{ t('search.empty') }}</p>
           <template v-else-if="top.length">
             <p class="eyebrow mb-1">{{ t('search.top') }}</p>
-            <ScrollArea class="max-h-96">
+            <div class="max-h-96 overflow-y-auto">
               <div class="divide-y">
                 <TrackRow v-for="(tr, i) in top" :key="tr.id" :track="tr" :index="i + 1" :subtitle="tr.album">
                   <Button size="sm" @click="request(tr)"><Plus />{{ t('search.request') }}</Button>
                 </TrackRow>
               </div>
-            </ScrollArea>
+            </div>
           </template>
           <p v-else class="text-sm text-muted-foreground">{{ t('search.hint') }}</p>
         </CardContent>
@@ -300,7 +303,7 @@ onUnmounted(() => { es?.close(); window.clearInterval(health) })
           <p class="eyebrow">{{ t('queue.eyebrow', { n: state?.queue.length ?? 0 }) }}</p>
         </CardHeader>
         <CardContent>
-          <ScrollArea v-if="state?.queue.length" class="max-h-96">
+          <div v-if="state?.queue.length" class="max-h-96 overflow-y-auto">
             <div class="divide-y">
               <TrackRow v-for="(it, i) in state.queue" :key="it.id" :track="it.track" :index="i + 1" :subtitle="it.requestedBy">
                 <Button variant="outline" size="sm" class="font-mono tabular-nums" @click="vote(it.id)">
@@ -311,7 +314,7 @@ onUnmounted(() => { es?.close(); window.clearInterval(health) })
                 </Button>
               </TrackRow>
             </div>
-          </ScrollArea>
+          </div>
           <p v-else class="text-sm text-muted-foreground">{{ t('queue.empty') }}</p>
         </CardContent>
       </Card>
