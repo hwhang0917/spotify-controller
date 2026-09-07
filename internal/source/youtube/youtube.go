@@ -45,6 +45,8 @@ var (
 	// that a server-side caller cannot satisfy.
 	ErrKeyRestricted = &source.CodedError{Kind: "youtube_key_restricted", Msg: "youtube: API key rejected because of its application restriction"}
 	ErrKeyInvalid    = &source.CodedError{Kind: "youtube_key_invalid", Msg: "youtube: API key invalid or the Data API is not enabled"}
+	// ErrChartUnavailable: YouTube has no most-popular chart for that region/category.
+	ErrChartUnavailable = &source.CodedError{Kind: "youtube_chart_unavailable", Msg: "youtube: no chart for this region"}
 )
 
 // Command is what the embedded player is asked to do.
@@ -204,21 +206,26 @@ func (s *Source) get(ctx context.Context, path string, q url.Values, out any) er
 		var e apiError
 		_ = json.NewDecoder(res.Body).Decode(&e)
 		msg := strings.ToLower(e.Error.Message)
+		reasons := ""
 		for _, r := range e.Error.Errors {
+			reasons += r.Reason + " "
 			switch r.Reason {
 			case "quotaExceeded", "dailyLimitExceeded":
 				return ErrQuotaExceeded
 			case "keyInvalid":
 				return ErrKeyInvalid
+			case "videoChartNotFound":
+				return ErrChartUnavailable
 			}
 		}
 		switch {
 		case strings.Contains(msg, "referer") || strings.Contains(msg, "referrer") || strings.Contains(msg, "ip address") || strings.Contains(msg, "api_key_http_referrer_blocked") || strings.Contains(msg, "api_key_ip_address_blocked"):
 			return ErrKeyRestricted
-		case strings.Contains(msg, "api key not valid") || strings.Contains(msg, "has not been used") || strings.Contains(msg, "is disabled"):
+		case strings.Contains(msg, "api key not valid"):
 			return ErrKeyInvalid
 		}
-		return fmt.Errorf("youtube: %d %s", res.StatusCode, e.Error.Message)
+		// Unknown: keep Google's words so the host log and the guest toast say what happened.
+		return fmt.Errorf("youtube: %d %s%s", res.StatusCode, strings.TrimSpace(reasons+" "), e.Error.Message)
 	}
 	return json.NewDecoder(res.Body).Decode(out)
 }
@@ -301,10 +308,16 @@ func (s *Source) Chart(ctx context.Context, region string, limit int) ([]source.
 		return c.tracks[:limit], nil
 	}
 	var vr videosResponse
-	err := s.get(ctx, "/videos", url.Values{
-		"part": {"snippet,contentDetails"}, "chart": {"mostPopular"},
-		"videoCategoryId": {musicCategory}, "regionCode": {region}, "maxResults": {strconv.Itoa(limit)},
-	}, &vr)
+	fetch := func(region string) error {
+		return s.get(ctx, "/videos", url.Values{
+			"part": {"snippet,contentDetails"}, "chart": {"mostPopular"},
+			"videoCategoryId": {musicCategory}, "regionCode": {region}, "maxResults": {strconv.Itoa(limit)},
+		}, &vr)
+	}
+	err := fetch(region)
+	if err == ErrChartUnavailable && region != defaultRegion {
+		err = fetch(defaultRegion) // no music chart for that region: show the global one
+	}
 	if err != nil {
 		return nil, err
 	}

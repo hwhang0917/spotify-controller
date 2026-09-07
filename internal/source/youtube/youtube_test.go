@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -155,5 +156,38 @@ func TestChartCachesPerRegion(t *testing.T) {
 	_ = s.Play(context.Background(), "k1")
 	if pb, _ := s.Status(context.Background()); pb.Track == nil || pb.Track.Title != "K1" {
 		t.Fatalf("status should know chart tracks: %+v", pb)
+	}
+}
+
+func TestChartFallsBackWhenRegionHasNone(t *testing.T) {
+	var regions []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		region := r.URL.Query().Get("regionCode")
+		regions = append(regions, region)
+		if region == "XX" {
+			w.WriteHeader(404)
+			w.Write([]byte(`{"error":{"code":404,"errors":[{"reason":"videoChartNotFound"}],"message":"The requested chart is not supported or is not available."}}`))
+			return
+		}
+		w.Write([]byte(`{"items":[{"id":"u1","snippet":{"title":"U1"},"contentDetails":{"duration":"PT1M"}}]}`))
+	}))
+	defer srv.Close()
+	s := New(Options{APIKey: "k", APIURL: srv.URL})
+	got, err := s.Chart(context.Background(), "XX", 5)
+	if err != nil || len(got) != 1 || len(regions) != 2 || regions[1] != defaultRegion {
+		t.Fatalf("fallback: %+v %v regions=%v", got, err, regions)
+	}
+}
+
+func TestUnknownAPIErrorKeepsMessage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		w.Write([]byte(`{"error":{"code":400,"errors":[{"reason":"invalidChart"}],"message":"The request specifies an invalid chart."}}`))
+	}))
+	defer srv.Close()
+	s := New(Options{APIKey: "k", APIURL: srv.URL})
+	_, err := s.Chart(context.Background(), "KR", 5)
+	if err == nil || source.ErrorCode(err, "") != "" || !strings.Contains(err.Error(), "invalidChart") || !strings.Contains(err.Error(), "invalid chart") {
+		t.Fatalf("unknown error should carry reason and message: %v", err)
 	}
 }

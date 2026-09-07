@@ -53,7 +53,8 @@ const messages: Messages = {
     'err.track_required': 'Pick a song first.',
     'err.player_not_running': 'The host has not started the player.',
     'err.no_source': 'The host has not picked a music source yet.',
-    'err.search_failed': 'Search failed on the host. Try again in a moment.',
+    'err.search_failed': 'Search failed on the host.',
+    'err.youtube_chart_unavailable': 'YouTube has no music chart for this region.',
     'err.youtube_quota': 'The host\'s YouTube search quota for today is used up.',
     'err.youtube_key_restricted': 'The host\'s YouTube API key is misconfigured. Ask them to check the admin window.',
     'err.youtube_key_invalid': 'The host\'s YouTube API key is not working. Ask them to check the admin window.',
@@ -112,7 +113,8 @@ const messages: Messages = {
     'err.track_required': '먼저 곡을 선택해 주세요.',
     'err.player_not_running': '호스트가 아직 플레이어를 시작하지 않았어요.',
     'err.no_source': '호스트가 아직 음악 소스를 선택하지 않았어요.',
-    'err.search_failed': '호스트에서 검색에 실패했어요. 잠시 후 다시 시도해 주세요.',
+    'err.search_failed': '호스트에서 검색에 실패했어요.',
+    'err.youtube_chart_unavailable': '이 지역에는 YouTube 음악 차트가 없어요.',
     'err.youtube_quota': '호스트의 오늘 YouTube 검색 할당량을 다 썼어요.',
     'err.youtube_key_restricted': '호스트의 YouTube API 키 설정에 문제가 있어요. 관리 창을 확인해 달라고 요청해 주세요.',
     'err.youtube_key_invalid': '호스트의 YouTube API 키가 동작하지 않아요. 관리 창을 확인해 달라고 요청해 주세요.',
@@ -126,4 +128,11 @@ export const locale = ref<Locale>(detectLocale())
 export function setLocale(l: Locale) { locale.value = l; saveLocale(l) }
 export const t = (key: string, vars?: Record<string, string | number>) => format(messages, locale.value, key, vars)
 // Server error codes map to err.* keys; unknown text passes through.
-export const tError = (code: string) => (messages.en[`err.${code}`] ? t(`err.${code}`) : code)
+// Server errors are "code" or "code: detail"; known codes translate, and a
+// detail (the provider's own words) is appended so nothing gets hidden.
+export function tError(raw: string): string {
+  const [code, ...rest] = raw.split(': ')
+  const detail = rest.join(': ')
+  if (!messages.en[`err.${code}`]) return raw
+  return detail ? `${t(`err.${code}`)} (${detail})` : t(`err.${code}`)
+}

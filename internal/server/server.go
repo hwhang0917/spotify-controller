@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"net/http"
 	"path"
 	"strings"
@@ -282,7 +283,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	}
 	tracks, err := s.player.Search(r.Context(), r.URL.Query().Get("source"), q, searchLimit)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, source.ErrorCode(err, errSearchFailed))
+		writeError(w, http.StatusBadGateway, sourceErr(err))
 		return
 	}
 	if tracks == nil {
@@ -320,7 +321,7 @@ func (s *Server) chart(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	tracks, err := s.player.Chart(r.Context(), q.Get("source"), q.Get("region"), chartLimit)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, source.ErrorCode(err, errSearchFailed))
+		writeError(w, http.StatusBadGateway, sourceErr(err))
 		return
 	}
 	if tracks == nil {
@@ -384,6 +385,17 @@ func (s *Server) artwork(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- helpers ---
+
+// sourceErr turns a source failure into what the guest UI shows: a known
+// code, or "search_failed: <provider message>" so nothing is hidden. Either
+// way the host log gets the full error.
+func sourceErr(err error) string {
+	log.Println("source:", err)
+	if code := source.ErrorCode(err, ""); code != "" {
+		return code
+	}
+	return errSearchFailed + ": " + err.Error()
+}
 
 // noRobots marks every response as not for indexing; this is a private LAN page.
 func noRobots(next http.Handler) http.Handler {
