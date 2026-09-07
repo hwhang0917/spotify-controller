@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ArrowDown, ArrowUp, Ban, ChevronUp, FolderOpen, FolderPlus, Minus, Pause, Play, Power, RefreshCw, SkipForward, Trash2, Unplug, Users, Volume2, X } from '@lucide/vue'
+import { ArrowDown, ArrowUp, Ban, Check, ChevronUp, Copy, FolderOpen, FolderPlus, Minus, Pause, Play, Power, RefreshCw, SkipForward, Ticket, Trash2, Unplug, Users, Volume2, X } from '@lucide/vue'
 import * as api from '../wailsjs/go/main/App'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
+import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -19,7 +20,7 @@ import SpotifyIcon from './SpotifyIcon.vue'
 import { toast } from 'vue-sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { locale, setLocale, t, tError } from './i18n'
-import type { Config, Device, GuestInfo, ServerStatus, SourceStatus, State } from './types'
+import type { Config, Device, GuestInfo, Invitation, ServerStatus, SourceStatus, State } from './types'
 import { fmtDuration, NS_PER_SEC } from './types'
 
 // Wails events push changes; the poll is a safety net so the guest list and
@@ -32,6 +33,9 @@ const sources = ref<SourceStatus[]>([])
 const server = ref<ServerStatus>({ running: false, port: 0, url: '' })
 const state = ref<State | null>(null)
 const guests = ref<GuestInfo[]>([])
+const invitations = ref<Invitation[]>([])
+const inviteTtl = ref('480')
+const TTL_OPTIONS = [['60', 'invite.ttl.1h'], ['480', 'invite.ttl.8h'], ['1440', 'invite.ttl.24h'], ['10080', 'invite.ttl.7d']] as const
 const devices = ref<Device[]>([])
 const folders = ref<string[]>([])
 const volume = ref([100])
@@ -54,12 +58,13 @@ async function run(label: string, fn: () => Promise<string | void>, errVars: Rec
 }
 
 async function refresh() {
-  const [c, s, st, ps, g] = await Promise.all([api.GetConfig(), api.Sources(), api.Status(), api.GetState(), api.Guests()])
+  const [c, s, st, ps, g, inv] = await Promise.all([api.GetConfig(), api.Sources(), api.Status(), api.GetState(), api.Guests(), api.Invitations()])
   cfg.value = c
   sources.value = s
   server.value = { ...st, port: server.value.port || st.port }
   state.value = ps
-  guests.value = g
+  guests.value = g ?? []
+  invitations.value = inv ?? []
   folders.value = [...(c.local.folders ?? [])]
   skipRatio.value = [Math.round(c.skipRatio * 100)]
 }
@@ -121,6 +126,17 @@ const onSeekCommit = (v: number[] | undefined) => {
 }
 const kick = (id: string) => run('kick', async () => { await api.KickGuest(id); return t('toast.guestKicked') })
 const removeGuest = (id: string) => run('remove', async () => { await api.RemoveGuest(id); return t('toast.guestRemoved') })
+const setInviteOnly = (on: boolean) => run('invite-only', async () => { await api.SetInviteOnly(on); return t(on ? 'toast.inviteOn' : 'toast.inviteOff') })
+const admit = (id: string) => run('admit', async () => { await api.AdmitGuest(id); return t('toast.guestAdmitted') })
+const createInvitation = () => run('invite', async () => {
+  const inv: Invitation = await api.CreateInvitation(Number(inviteTtl.value))
+  return t('toast.inviteCreated', { code: inv.code ?? '' })
+})
+const revokeInvitation = (id: number) => run('revoke', async () => { await api.RevokeInvitation(id); return t('toast.inviteRevoked') })
+const joinUrl = (code: string) => `${server.value.url || `http://<host>:${server.value.port}`}/join?invitationCode=${code}`
+const copyLink = (code: string) => run('copy', async () => { await navigator.clipboard.writeText(joinUrl(code)); return t('toast.linkCopied') })
+const isExpired = (inv: Invitation) => new Date(inv.expiresAt).getTime() < Date.now()
+const fmtWhen = (iso: string) => new Date(iso).toLocaleString(locale.value === 'ko' ? 'ko-KR' : 'en-US', { dateStyle: 'short', timeStyle: 'short' })
 const block = (g: GuestInfo) => run('block', async () => {
   await api.BlockGuest(g.id, !g.blocked)
   return t(g.blocked ? 'toast.guestUnblocked' : 'toast.guestBlocked')
@@ -145,12 +161,12 @@ let tick: number | undefined
 onMounted(async () => {
   await refresh().catch((e) => toast.error(tError(e)))
   stops.push(EventsOn('state', (s: State) => { state.value = s }))
-  stops.push(EventsOn('guests', (g: GuestInfo[]) => { guests.value = g }))
+  stops.push(EventsOn('guests', (g: GuestInfo[]) => { guests.value = g ?? []; api.Invitations().then((i) => { invitations.value = i ?? [] }).catch(() => {}) }))
   tick = window.setInterval(() => { now.value = Date.now() }, 500)
   poll = window.setInterval(async () => {
     try {
       const [g, st] = await Promise.all([api.Guests(), api.Status()])
-      guests.value = g
+      guests.value = g ?? []
       server.value = { ...st, port: server.value.port || st.port }
     } catch {
       // transient; the next poll or event will catch up
@@ -302,6 +318,52 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                 </div>
               </CardContent>
             </Card>
+
+            <Card class="mt-4">
+              <CardHeader>
+                <CardTitle class="flex items-center justify-between gap-3">
+                  <span class="flex items-center gap-2"><Ticket class="size-4" />{{ t('invite.title') }}</span>
+                  <label class="flex items-center gap-2 text-sm font-normal">
+                    {{ t('invite.only') }}
+                    <Switch :model-value="cfg.inviteOnly" :disabled="!!busy" @update:model-value="setInviteOnly" />
+                  </label>
+                </CardTitle>
+                <CardDescription>{{ t('invite.desc', { url: '/join?invitationCode=…' }) }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div class="flex flex-wrap items-end gap-2">
+                  <div class="space-y-1">
+                    <Label>{{ t('invite.ttl') }}</Label>
+                    <Select v-model="inviteTtl">
+                      <SelectTrigger class="w-36"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="[v, k] in TTL_OPTIONS" :key="v" :value="v">{{ t(k) }}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button :disabled="!!busy" @click="createInvitation"><Ticket />{{ t('invite.create') }}</Button>
+                </div>
+                <p v-if="!invitations.length" class="text-sm text-muted-foreground">{{ t('invite.empty') }}</p>
+                <ul v-else class="divide-y rounded-md border">
+                  <li v-for="inv in invitations" :key="inv.id" class="flex items-center gap-3 px-3 py-2 text-sm" :class="inv.revoked || isExpired(inv) ? 'opacity-60' : ''">
+                    <div class="min-w-0 flex-1">
+                      <p class="font-mono">
+                        <template v-if="inv.code">{{ inv.code }}</template>
+                        <span v-else class="text-muted-foreground">{{ t('invite.hidden', { label: inv.label }) }}</span>
+                      </p>
+                      <p class="text-xs text-muted-foreground">
+                        <template v-if="inv.revoked">{{ t('invite.revoked') }}</template>
+                        <template v-else-if="isExpired(inv)">{{ t('invite.expired') }}</template>
+                        <template v-else>{{ t('invite.expires', { when: fmtWhen(inv.expiresAt) }) }}</template>
+                        · {{ t('invite.uses', { n: inv.uses }) }}
+                      </p>
+                    </div>
+                    <Button v-if="inv.code && !inv.revoked && !isExpired(inv)" variant="outline" size="sm" :disabled="!!busy" @click="copyLink(inv.code)"><Copy />{{ t('invite.copy') }}</Button>
+                    <Button v-if="!inv.revoked && !isExpired(inv)" variant="ghost" size="sm" class="text-destructive" :disabled="!!busy" @click="revokeInvitation(inv.id)">{{ t('invite.revoke') }}</Button>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <!-- Sources -->
@@ -407,12 +469,16 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                         <span class="ml-2 font-mono text-xs text-muted-foreground">{{ g.id.slice(0, 8) }}</span>
                       </TableCell>
                       <TableCell>
-                        <Badge v-if="g.blocked" variant="destructive">{{ t('guests.blocked') }}</Badge>
-                        <Badge v-else-if="g.connections" variant="secondary" class="gap-1.5"><span class="size-1.5 rounded-full bg-link" />{{ t('guests.online') }}</Badge>
-                        <Badge v-else variant="outline">{{ t('guests.offline') }}</Badge>
+                        <div class="flex flex-wrap gap-1">
+                          <Badge v-if="g.blocked" variant="destructive">{{ t('guests.blocked') }}</Badge>
+                          <Badge v-else-if="g.connections" variant="secondary" class="gap-1.5"><span class="size-1.5 rounded-full bg-link" />{{ t('guests.online') }}</Badge>
+                          <Badge v-else variant="outline">{{ t('guests.offline') }}</Badge>
+                          <Badge v-if="cfg.inviteOnly && !g.blocked" :variant="g.admitted ? 'outline' : 'destructive'">{{ g.admitted ? t('guests.admitted') : t('guests.waiting') }}</Badge>
+                        </div>
                       </TableCell>
                       <TableCell class="text-right">
                         <div class="inline-flex gap-1">
+                          <Button v-if="cfg.inviteOnly && !g.admitted && !g.blocked" size="sm" :disabled="!!busy" @click="admit(g.id)"><Check />{{ t('guests.admit') }}</Button>
                           <Tooltip v-if="g.connections">
                             <TooltipTrigger as-child>
                               <Button variant="ghost" size="icon-sm" :disabled="!!busy" @click="kick(g.id)"><Unplug /></Button>

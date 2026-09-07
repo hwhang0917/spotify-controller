@@ -28,6 +28,31 @@ const searching = ref(false)
 const error = ref('')
 const connected = ref(false)
 const blocked = ref(false)
+const inviteRequired = ref(false)
+const inviteInvalid = new URLSearchParams(location.search).get('invite') === 'invalid'
+// Health check: the stream dropping could be a kick or a reconnect blip, so
+// the page only goes "offline" once /api/health itself fails. It then probes
+// until the server answers again.
+const HEALTH_MS = 3000
+const offline = ref(false)
+let health: number | undefined
+
+async function probe() {
+  try {
+    const res = await fetch('/api/health', { cache: 'no-store' })
+    if (!res.ok) throw new Error(String(res.status))
+    if (offline.value) {
+      offline.value = false
+      window.clearInterval(health)
+      health = undefined
+      await act(() => api('GET', '/api/me')) // re-check block / invite status after the host came back
+    }
+  } catch {
+    offline.value = true
+    connected.value = false
+    if (health === undefined) health = window.setInterval(probe, HEALTH_MS)
+  }
+}
 
 class ApiError extends Error {
   constructor(public code: string, public status: number) { super(code) }
@@ -52,6 +77,8 @@ async function act(fn: () => Promise<string | void>) {
     if (msg) toast.success(msg)
   } catch (e) {
     if (e instanceof ApiError && e.code === 'blocked') { blocked.value = true; return }
+    if (e instanceof ApiError && e.code === 'invite_required') { inviteRequired.value = true; return }
+    if (!(e instanceof ApiError)) { probe(); return } // network failure: is the server gone?
     const msg = tError((e as Error).message)
     if (name.value) toast.error(msg)
     else error.value = msg // name gate shows it inline
@@ -99,7 +126,8 @@ onMounted(async () => {
     const me = await api<{ name: string }>('GET', '/api/me')
     name.value = me.name
   })
-  if (blocked.value) return
+  if (blocked.value || inviteRequired.value || offline.value) return
+  inviteRequired.value = false
   es = new EventSource('/api/events')
   es.addEventListener('state', (e) => {
     const s: State = JSON.parse((e as MessageEvent).data)
@@ -109,16 +137,36 @@ onMounted(async () => {
   es.onopen = () => { connected.value = true }
   es.onerror = () => {
     connected.value = false
-    // A kick just reconnects; a block shows up as 403 on the next probe.
+    // A kick just reconnects; a block or a dead server shows up on the probe.
+    probe()
     act(() => api('GET', '/api/me'))
   }
 })
-onUnmounted(() => es?.close())
+onUnmounted(() => { es?.close(); window.clearInterval(health) })
 </script>
 
 <template>
+  <div v-if="offline" class="fixed inset-x-0 top-0 z-50 bg-destructive px-4 py-2 text-center text-sm font-medium text-white shadow-md">
+    {{ t('offline.ribbon') }}
+  </div>
+  <Toaster position="bottom-right" rich-colors close-button />
+
+  <!-- invitation required -->
+  <main v-if="inviteRequired && !blocked" class="min-h-screen flex items-center justify-center p-6" :class="offline ? 'pointer-events-none opacity-50' : ''">
+    <Card class="w-full max-w-sm">
+      <CardHeader>
+        <p class="eyebrow">vibe-music</p>
+        <CardTitle class="text-xl">{{ t('invite.title') }}</CardTitle>
+      </CardHeader>
+      <CardContent class="space-y-2 text-sm text-body">
+        <p>{{ t('invite.body') }}</p>
+        <p v-if="inviteInvalid" class="text-destructive">{{ t('invite.invalid') }}</p>
+      </CardContent>
+    </Card>
+  </main>
+
   <!-- blocked -->
-  <main v-if="blocked" class="min-h-screen flex items-center justify-center p-6">
+  <main v-else-if="blocked" class="min-h-screen flex items-center justify-center p-6">
     <Card class="w-full max-w-sm">
       <CardHeader>
         <p class="eyebrow">vibe-music</p>
@@ -129,7 +177,7 @@ onUnmounted(() => es?.close())
   </main>
 
   <!-- name gate -->
-  <main v-else-if="!name" class="min-h-screen flex items-center justify-center p-6">
+  <main v-else-if="!name" class="min-h-screen flex items-center justify-center p-6" :class="offline ? 'pointer-events-none opacity-50' : ''">
     <Card class="w-full max-w-sm">
       <CardHeader class="flex-row items-center justify-between">
         <p class="eyebrow">vibe-music</p>
@@ -147,8 +195,7 @@ onUnmounted(() => es?.close())
   </main>
 
   <!-- player -->
-  <main v-else class="min-h-screen mx-auto max-w-3xl space-y-4 p-4 sm:p-8">
-    <Toaster position="bottom-right" rich-colors close-button />
+  <main v-else class="min-h-screen mx-auto max-w-3xl space-y-4 p-4 sm:p-8" :class="offline ? 'pointer-events-none select-none opacity-50' : ''" :aria-disabled="offline">
     <header class="flex items-center justify-between">
       <div>
         <p class="eyebrow">vibe-music</p>

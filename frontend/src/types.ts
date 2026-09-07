@@ -3,6 +3,7 @@ export interface Config {
   port: number
   activeSource: string
   skipRatio: number
+  inviteOnly: boolean
   local: { folders: string[] }
   spotify: { clientId: string; deviceId?: string }
 }
@@ -76,5 +77,16 @@ export interface GuestInfo {
   name: string
   connections: number
   blocked: boolean
+  admitted: boolean
   lastSeen: string
+}
+
+export interface Invitation {
+  id: number
+  label: string
+  code?: string // only for codes created this session
+  createdAt: string
+  expiresAt: string
+  revoked: boolean
+  uses: number
 }

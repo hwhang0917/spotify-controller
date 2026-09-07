@@ -25,3 +25,8 @@ export function RemoveQueueItem(arg1) { return app()['RemoveQueueItem'](arg1); }
 export function PickFolder() { return app()['PickFolder'](); }
 export function MoveQueueItem(arg1, arg2) { return app()['MoveQueueItem'](arg1, arg2); }
 export function Seek(arg1) { return app()['Seek'](arg1); }
+export function SetInviteOnly(arg1) { return app()['SetInviteOnly'](arg1); }
+export function AdmitGuest(arg1) { return app()['AdmitGuest'](arg1); }
+export function CreateInvitation(arg1) { return app()['CreateInvitation'](arg1); }
+export function Invitations() { return app()['Invitations'](); }
+export function RevokeInvitation(arg1) { return app()['RevokeInvitation'](arg1); }

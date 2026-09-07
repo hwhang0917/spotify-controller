@@ -33,7 +33,12 @@ host process.
   non-streaming app. Guests never hold a token; the server searches and queues
   on their behalf.
 - **Guests are a cookie plus a display name.** Enough for one vote per person
-  and "requested by Kim". Roles and invites come later.
+  and "requested by Kim". The admin can disconnect, remove, or block anyone.
+- **Invitation-only mode.** Flip the switch and newcomers need a link like
+  `http://<host>:5555/join?invitationCode=K7PM-3QXD`. Codes have a TTL and can
+  be revoked. Everyone already in the room stays in when you turn it on.
+- **Everything survives a relaunch.** Settings, guests, blocks, invitations and
+  the queue live in a SQLite file (pure Go driver, no CGO).
 
 ## Requirements
 
@@ -73,9 +78,23 @@ the 5-user limit is never an issue.
 Start the guest server from the admin window and share the URL it shows.
 Guests type a name, then search, request, upvote, and vote to skip.
 
-Config lives at `$XDG_CONFIG_HOME/vibe-music/config.json` (Linux),
+Data lives in `$XDG_CONFIG_HOME/vibe-music/` (Linux),
 `~/Library/Application Support/vibe-music/` (macOS), or `%AppData%\vibe-music\`
-(Windows). Override with `VIBE_MUSIC_CONFIG=/path/to/config.json`.
+(Windows). Override the directory with `VIBE_MUSIC_DIR`. It holds
+`vibe-music.db` (settings, guests, invitations, queue) and, once connected,
+`spotify-token.json`, both `0600`.
+
+### What is and isn't stored
+
+- Guest identity is a random cookie. The database keeps only its SHA-256, so
+  reading the file does not let anyone impersonate a guest.
+- Invitation codes are stored as SHA-256 too. The plaintext is shown in the
+  admin window only for codes created since the app was launched.
+- The Spotify token must be usable, so it cannot be hashed. It stays in its own
+  `0600` file outside the database. Encrypting it with a key kept next to it
+  would add nothing; the OS keychain is the upgrade path if the host is shared.
+- bcrypt is not used because there are no passwords: every secret here is a
+  high-entropy random token, where a fast hash is the correct choice.
 
 ## Develop
 
@@ -106,7 +125,8 @@ internal/source/local/     folder scan, tags, search, beep playback
 internal/source/spotify/   PKCE connect, Web API remote control, end detection
 internal/source/fake/      in-memory source for tests
 internal/player/           queue, votes, skip threshold, poll loop, state fan-out
-internal/config/           config.json in the user config dir
+internal/config/           settings (in the store) and the Spotify token file
+internal/store/            SQLite: settings, guests, invitations, queue
 internal/server/           Chi: guest cookie + name, /api/*, SSE, SPA fallback
 ui/theme.css               DESIGN.md tokens mapped onto shadcn-vue's CSS variables
 ui/i18n.ts                 framework-free EN/KO lookup shared by both UIs
