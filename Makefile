@@ -28,12 +28,15 @@ dev: ## Run the admin window with hot reload
 dev-web: ## Run the guest UI dev server (proxies /api to the running guest server)
 	npm --prefix web run dev
 
+# node_modules ships Go files (flatted); keep the Go tools to our own packages
+GO_PKGS = $$(go list ./... | grep -v /node_modules/)
+
 test: ## Run Go tests
-	go test ./...
+	go test $(GO_PKGS)
 
 lint: ## gofmt check, go vet, and Vue type-check for both UIs
-	@test -z "$$(gofmt -l . | tee /dev/stderr)" || (echo "gofmt: files need formatting" && exit 1)
-	go vet ./...
+	@test -z "$$(gofmt -l main.go app.go logging.go internal web | tee /dev/stderr)" || (echo "gofmt: files need formatting" && exit 1)
+	go vet $(GO_PKGS)
 	npm --prefix frontend run typecheck
 	npm --prefix web run typecheck
 

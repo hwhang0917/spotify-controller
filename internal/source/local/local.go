@@ -111,7 +111,8 @@ func (s *Source) Deactivate(ctx context.Context) error {
 // Cache remembers what a file indexed to (tags and duration) keyed by path,
 // size and mtime, so a rescan only opens files that are new or changed.
 // Reading an MP3's duration means reading the whole file, so this is what
-// keeps startup quick for a large library.
+// keeps startup quick for a large library. Methods are called from several
+// scan workers at once and must be safe for that.
 type Cache interface {
 	Get(path string, size int64, mtime time.Time) ([]byte, bool)
 	Put(path string, size int64, mtime time.Time, data []byte)
@@ -170,8 +171,9 @@ func (s *Source) Rescan() (int, error) {
 
 	started := time.Now()
 	results := make([]indexed, len(paths))
-	var done atomic.Int64
 	var wg sync.WaitGroup
+	var reportMu sync.Mutex // increment and report together so progress never goes backwards
+	done := 0
 	sem := make(chan struct{}, scanWorkers)
 	for i, p := range paths {
 		wg.Add(1)
@@ -179,9 +181,12 @@ func (s *Source) Rescan() (int, error) {
 		go func(i int, p string) {
 			defer func() { <-sem; wg.Done() }()
 			results[i] = index(p, cache)
+			reportMu.Lock()
+			done++
 			if progress != nil {
-				progress(int(done.Add(1)), len(paths))
+				progress(done, len(paths))
 			}
+			reportMu.Unlock()
 		}(i, p)
 	}
 	wg.Wait()

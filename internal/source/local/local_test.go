@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/hwhang0917/vibe-music/internal/source"
@@ -94,19 +95,26 @@ func TestGainMapping(t *testing.T) {
 }
 
 type memCache struct {
+	mu   sync.Mutex
 	m    map[string][]byte
 	hits int
 }
 
 func (c *memCache) Get(path string, _ int64, _ time.Time) ([]byte, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	d, ok := c.m[path]
 	if ok {
 		c.hits++
 	}
 	return d, ok
 }
-func (c *memCache) Put(path string, _ int64, _ time.Time, d []byte) { c.m[path] = d }
-func (c *memCache) Prune(time.Time)                                 {}
+func (c *memCache) Put(path string, _ int64, _ time.Time, d []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.m[path] = d
+}
+func (c *memCache) Prune(time.Time) {}
 
 // A second scan answers from the cache and reports progress to the end.
 func TestRescanUsesCacheAndReportsProgress(t *testing.T) {
