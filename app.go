@@ -564,8 +564,8 @@ func (a *App) SetYouTubeAPIKey(key string) error {
 
 // YouTubeTest checks the saved key with a real search and chart call.
 func (a *App) YouTubeTest(region string) (string, error) {
-	out, err := a.youtube.Test(a.ctx, region)
-	return out, uiError(err)
+	// Deliberately not uiError: the admin wants the exact response here.
+	return a.youtube.Test(a.ctx, region)
 }
 
 // YouTubeReport receives the embedded player's state from the admin page.

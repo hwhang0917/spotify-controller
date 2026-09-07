@@ -11,6 +11,7 @@ package youtube
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -209,23 +210,28 @@ func (s *Source) get(ctx context.Context, path string, q url.Values, out any) er
 		reasons := ""
 		for _, r := range e.Error.Errors {
 			reasons += r.Reason + " "
+		}
+		// Every mapped error still carries Google's status, reasons and message
+		// (wrapped), so a raw view shows exactly what was refused and why.
+		detail := fmt.Errorf("youtube: HTTP %d %s%s", res.StatusCode, strings.TrimSpace(reasons+" "), e.Error.Message)
+		wrap := func(sentinel *source.CodedError) error { return fmt.Errorf("%w: %v", sentinel, detail) }
+		for _, r := range e.Error.Errors {
 			switch r.Reason {
 			case "quotaExceeded", "dailyLimitExceeded":
-				return ErrQuotaExceeded
+				return wrap(ErrQuotaExceeded)
 			case "keyInvalid":
-				return ErrKeyInvalid
+				return wrap(ErrKeyInvalid)
 			case "videoChartNotFound":
-				return ErrChartUnavailable
+				return wrap(ErrChartUnavailable)
 			}
 		}
 		switch {
 		case strings.Contains(msg, "referer") || strings.Contains(msg, "referrer") || strings.Contains(msg, "ip address") || strings.Contains(msg, "api_key_http_referrer_blocked") || strings.Contains(msg, "api_key_ip_address_blocked"):
-			return ErrKeyRestricted
+			return wrap(ErrKeyRestricted)
 		case strings.Contains(msg, "api key not valid"):
-			return ErrKeyInvalid
+			return wrap(ErrKeyInvalid)
 		}
-		// Unknown: keep Google's words so the host log and the guest toast say what happened.
-		return fmt.Errorf("youtube: %d %s%s", res.StatusCode, strings.TrimSpace(reasons+" "), e.Error.Message)
+		return detail
 	}
 	return json.NewDecoder(res.Body).Decode(out)
 }
@@ -332,7 +338,7 @@ func (s *Source) Chart(ctx context.Context, region string, limit int) ([]source.
 		}, &vr)
 	}
 	err := fetch(region)
-	if err == ErrChartUnavailable && region != defaultRegion {
+	if errors.Is(err, ErrChartUnavailable) && region != defaultRegion {
 		err = fetch(defaultRegion) // no music chart for that region: show the global one
 	}
 	if err != nil {

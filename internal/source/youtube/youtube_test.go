@@ -2,6 +2,7 @@ package youtube
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -67,7 +68,7 @@ func TestQuotaError(t *testing.T) {
 	}))
 	defer srv.Close()
 	s := New(Options{APIKey: "k", APIURL: srv.URL})
-	if _, err := s.Search(context.Background(), "x", 1); err != ErrQuotaExceeded {
+	if _, err := s.Search(context.Background(), "x", 1); !errors.Is(err, ErrQuotaExceeded) {
 		t.Fatalf("want quota error, got %v", err)
 	}
 }
@@ -127,7 +128,7 @@ func TestKeyRestrictionError(t *testing.T) {
 	defer srv.Close()
 	s := New(Options{APIKey: "k", APIURL: srv.URL})
 	_, err := s.Search(context.Background(), "x", 1)
-	if err != ErrKeyRestricted || source.ErrorCode(err, "?") != "youtube_key_restricted" {
+	if !errors.Is(err, ErrKeyRestricted) || source.ErrorCode(err, "?") != "youtube_key_restricted" {
 		t.Fatalf("want ErrKeyRestricted, got %v", err)
 	}
 }
