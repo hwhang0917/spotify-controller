@@ -23,6 +23,8 @@ func main() {
 		Height:    800,
 		MinWidth:  960,
 		MinHeight: 640,
+		// match the canvas so the window never flashes white before the splash paints
+		BackgroundColour: &options.RGBA{R: 250, G: 250, B: 250, A: 255},
 		AssetServer: &assetserver.Options{
 			Assets: adminAssets,
 		},

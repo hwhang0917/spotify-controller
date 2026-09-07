@@ -38,6 +38,7 @@ const POLL_MS = 3000
 const NS_PER_MS = 1e6
 
 const cfg = ref<Config | null>(null)
+const ready = ref(false) // first data load done; the splash from index.html stays up until then
 const sources = ref<SourceStatus[]>([])
 const server = ref<ServerStatus>({ running: false, port: 0, url: '' })
 const state = ref<State | null>(null)
@@ -238,6 +239,7 @@ let tick: number | undefined
 onMounted(async () => {
   api.Info().then((v) => { info.value = v })
   await refresh().catch((e) => toast.error(tError(e)))
+  ready.value = true
   stops.push(EventsOn('state', (s: State) => { state.value = s; api.Sources().then((x) => { sources.value = x }).catch(() => {}) }))
   stops.push(EventsOn('notice', (code: string) => { toast.warning(t(`notice.${code}`)) }))
   stops.push(EventsOn('source-error', (msg: string) => { toast.error(t('notice.sourceError', { msg })) }))
@@ -273,7 +275,12 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-    <main class="mx-auto flex min-h-screen max-w-7xl flex-col gap-4 p-4 lg:h-screen lg:overflow-hidden lg:p-6">
+    <div v-if="!ready" class="splash" aria-busy="true">
+      <img src="/favicon.png" width="96" height="96" alt="" />
+      <p class="splash-name">vibe-music</p>
+      <span class="splash-dot"></span>
+    </div>
+    <main v-else class="mx-auto flex min-h-screen max-w-7xl flex-col gap-4 p-4 animate-in fade-in duration-300 lg:h-screen lg:overflow-hidden lg:p-6">
       <header class="flex shrink-0 items-center justify-between">
         <div>
           <p class="eyebrow">{{ t('admin') }}</p>
