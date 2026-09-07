@@ -296,6 +296,16 @@ func (p *Player) control(fn func(source.Source) error) error {
 	return err
 }
 
+// SetSkipRatio changes the fraction of connected guests needed to skip.
+func (p *Player) SetSkipRatio(r float64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if r > 0 && r <= 1 {
+		p.skipRatio = r
+	}
+	p.broadcastIfChanged()
+}
+
 // SetConnectedGuests updates the denominator for the skip threshold.
 func (p *Player) SetConnectedGuests(n int) {
 	p.mu.Lock()
