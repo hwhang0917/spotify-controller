@@ -1,6 +1,7 @@
 package spotify
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -100,5 +101,28 @@ func TestSavingTokenSourceSavesOnlyOnChange(t *testing.T) {
 	stub.err = errors.New("boom")
 	if _, err := ts.Token(); err == nil || saves != 1 {
 		t.Fatal("error must propagate without saving")
+	}
+}
+
+func TestConnectRejectsBadClientIDAndCancels(t *testing.T) {
+	opened := 0
+	s := New(Options{ClientID: "not-a-real-id", OpenBrowser: func(string) error { opened++; return nil }})
+	if err := s.Connect(context.Background()); err != ErrBadClientID || opened != 0 {
+		t.Fatalf("bad id: %v opened=%d", err, opened)
+	}
+	s.SetClientID("0123456789abcdef0123456789abcdef")
+	done := make(chan error, 1)
+	go func() { done <- s.Connect(context.Background()) }()
+	for i := 0; i < 100 && opened == 0; i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	s.CancelConnect()
+	select {
+	case err := <-done:
+		if err != ErrLoginCancelled {
+			t.Fatalf("cancel: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Connect did not return after cancel")
 	}
 }

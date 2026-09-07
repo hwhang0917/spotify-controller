@@ -45,10 +45,6 @@ const (
 	errServerRunning = "server_running"
 	errUnknownSource = "unknown_source"
 	errAudioOutput   = "audio_output"
-	errSpotifyNoConn = "spotify_not_connected"
-	errSpotifyNoID   = "spotify_client_id"
-	errSpotifyNoDev  = "spotify_no_device"
-	errSpotifyLogin  = "spotify_login_timeout"
 )
 
 // Winsock reports its own errno values; Go's syscall.EADDRINUSE/EACCES are
@@ -88,14 +84,6 @@ func uiError(err error) error {
 		return codeErr(errPortInUse, "")
 	case isErrno(err, syscall.EACCES, wsaEACCES):
 		return codeErr(errPortDenied, "")
-	case errors.Is(err, spotify.ErrNotConnected):
-		return codeErr(errSpotifyNoConn, "")
-	case errors.Is(err, spotify.ErrNoClientID):
-		return codeErr(errSpotifyNoID, "")
-	case errors.Is(err, spotify.ErrNoDevice):
-		return codeErr(errSpotifyNoDev, "")
-	case errors.Is(err, spotify.ErrLoginTimeout):
-		return codeErr(errSpotifyLogin, "")
 	case errors.Is(err, local.ErrAudioOutput):
 		return codeErr(errAudioOutput, err.Error())
 	}
@@ -409,6 +397,9 @@ func (a *App) PickFolder() (string, error) {
 func (a *App) SpotifyConnect() error { return uiError(a.spotify.Connect(a.ctx)) }
 
 func (a *App) SpotifyDisconnect() { a.spotify.Disconnect() }
+
+// SpotifyCancelConnect aborts a pending Connect (the admin closed the browser tab).
+func (a *App) SpotifyCancelConnect() { a.spotify.CancelConnect() }
 
 func (a *App) SpotifyDevices() ([]spotify.Device, error) {
 	d, err := a.spotify.Devices(a.ctx)

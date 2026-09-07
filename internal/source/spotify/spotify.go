@@ -14,6 +14,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -42,11 +43,16 @@ var scopes = []string{
 
 // Sentinel errors the admin UI maps to translated messages.
 var (
-	ErrNotConnected = errors.New("spotify: not connected")
-	ErrNoClientID   = errors.New("spotify: client ID is empty")
-	ErrNoDevice     = errors.New(noDeviceMessage)
-	ErrLoginTimeout = errors.New("spotify: login not completed")
+	ErrNotConnected   = &source.CodedError{Kind: "spotify_not_connected", Msg: "spotify: not connected"}
+	ErrNoClientID     = &source.CodedError{Kind: "spotify_client_id", Msg: "spotify: client ID is empty"}
+	ErrBadClientID    = &source.CodedError{Kind: "spotify_client_id_invalid", Msg: "spotify: client ID must be 32 hex characters"}
+	ErrNoDevice       = &source.CodedError{Kind: "spotify_no_device", Msg: noDeviceMessage}
+	ErrLoginTimeout   = &source.CodedError{Kind: "spotify_login_timeout", Msg: "spotify: login not completed"}
+	ErrLoginCancelled = &source.CodedError{Kind: "spotify_login_cancelled", Msg: "spotify: login cancelled"}
 )
+
+// clientIDPattern: Spotify client IDs are 32 lowercase hex characters.
+var clientIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 type Options struct {
 	ClientID string
@@ -73,6 +79,8 @@ type Source struct {
 
 	current spotify.ID // track we last asked to play; "" when idle
 	armed   bool       // we have seen `current` actually playing
+
+	cancelConnect context.CancelFunc // set while Connect waits for the browser
 }
 
 func New(opts Options) *Source {
@@ -136,6 +144,9 @@ func (s *Source) Connect(ctx context.Context) error {
 	if clientID == "" {
 		return ErrNoClientID
 	}
+	if !clientIDPattern.MatchString(clientID) {
+		return ErrBadClientID // catches typos before Spotify shows INVALID_CLIENT in a tab we cannot see
+	}
 	if open == nil {
 		return errors.New("spotify: no browser opener configured")
 	}
@@ -162,13 +173,24 @@ func (s *Source) Connect(ctx context.Context) error {
 
 	ctx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
+	s.mu.Lock()
+	s.cancelConnect = cancel
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.cancelConnect = nil
+		s.mu.Unlock()
+	}()
 	var code string
 	select {
 	case code = <-codeCh:
 	case err := <-errCh:
 		return err
 	case <-ctx.Done():
-		return fmt.Errorf("%w: %v", ErrLoginTimeout, ctx.Err())
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return ErrLoginCancelled
+		}
+		return ErrLoginTimeout
 	}
 
 	tok, err := cfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
@@ -207,6 +229,16 @@ func callbackHandler(state string, codeCh chan<- string, errCh chan<- error) htt
 			codeCh <- q.Get("code")
 		}
 	})
+}
+
+// CancelConnect aborts a Connect that is waiting for the browser.
+func (s *Source) CancelConnect() {
+	s.mu.Lock()
+	cancel := s.cancelConnect
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 // Disconnect forgets the token.

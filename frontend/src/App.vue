@@ -497,9 +497,13 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                   <Input id="clientId" v-model="cfg.spotify.clientId" class="font-mono text-xs" />
                 </div>
                 <div class="flex flex-wrap gap-2">
-                  <Button v-if="!isReady('spotify')" :disabled="!cfg.spotify.clientId || !!busy" @click="connect">
-                    {{ busy === 'connect' ? t('spotify.connecting') : t('spotify.connect') }}
-                  </Button>
+                  <template v-if="!isReady('spotify')">
+                    <Button v-if="busy !== 'connect'" :disabled="!cfg.spotify.clientId || !!busy" @click="connect">{{ t('spotify.connect') }}</Button>
+                    <template v-else>
+                      <Button disabled>{{ t('spotify.connecting') }}</Button>
+                      <Button variant="outline" @click="api.SpotifyCancelConnect()">{{ t('spotify.cancel') }}</Button>
+                    </template>
+                  </template>
                   <Button v-else variant="outline" :disabled="!!busy" @click="disconnect"><Unplug />{{ t('spotify.disconnect') }}</Button>
                   <Button variant="outline" :disabled="!isReady('spotify') || !!busy" @click="loadDevices">{{ t('spotify.devices') }}</Button>
                 </div>
