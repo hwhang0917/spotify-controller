@@ -462,6 +462,26 @@ func (a *App) SpotifyRedirectURI() string { return a.spotify.RedirectURI() }
 // SpotifyCancelConnect aborts a pending Connect (the admin closed the browser tab).
 func (a *App) SpotifyCancelConnect() { a.spotify.CancelConnect() }
 
+// SpotifyReset forgets everything about Spotify: switches it off (dropping
+// its queued songs), deletes the saved token, and clears the stored Client ID
+// and device. One call so nothing is left half-done.
+func (a *App) SpotifyReset() error {
+	if a.player.Enabled(a.spotify.ID()) {
+		if err := a.SetSourceEnabled(a.spotify.ID(), false); err != nil {
+			return err
+		}
+	}
+	a.spotify.CancelConnect()
+	a.spotify.Disconnect() // removes the token file via SaveToken(nil)
+	a.spotify.SetClientID("")
+	a.spotify.SetDeviceID("")
+	a.mu.Lock()
+	a.cfg.Spotify.ClientID = ""
+	a.cfg.Spotify.DeviceID = ""
+	a.mu.Unlock()
+	return a.saveConfig()
+}
+
 func (a *App) SpotifyDevices() ([]spotify.Device, error) {
 	d, err := a.spotify.Devices(a.ctx)
 	return d, uiError(err)

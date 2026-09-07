@@ -115,13 +115,9 @@ function confirmNow() {
 const askResetSpotify = () => { confirm.value = { title: t('spotify.resetTitle'), body: t('spotify.resetBody'), action: resetSpotify } }
 const askClearYouTubeKey = () => { confirm.value = { title: t('youtube.clearTitle'), body: t('youtube.clearBody'), action: clearYouTubeKey } }
 
-// Full reset: forget the token, drop the Client ID, and switch Spotify off if it was on.
-const resetSpotify = () => run('spotify-reset', async () => {
-  if (sources.value.some((s) => s.id === 'spotify' && s.enabled)) await api.SetSourceEnabled('spotify', false)
-  await api.SpotifyDisconnect()
-  if (cfg.value) { cfg.value.spotify.clientId = ''; await api.SaveConfig(configToSave()) }
-  return t('toast.spotifyReset')
-})
+// Full reset happens in Go (token, Client ID, device, source off) so the
+// stored settings can never disagree with what the UI shows.
+const resetSpotify = () => run('spotify-reset', async () => { await api.SpotifyReset(); return t('toast.spotifyReset') })
 const loadDevices = () => run('devices', async () => {
   devices.value = await api.SpotifyDevices()
   return t('toast.devicesLoaded', { n: devices.value.length })
