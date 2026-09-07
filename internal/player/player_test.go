@@ -462,3 +462,37 @@ func TestPlayFailureKeepsHeadQueued(t *testing.T) {
 		t.Fatal("head should be popped after a successful retry")
 	}
 }
+
+func TestPositionDriftForcesFrame(t *testing.T) {
+	p, f := setup(t)
+	ctx := context.Background()
+	_ = p.Request(ctx, a, g1)
+	ch, cancel := p.Subscribe()
+	defer cancel()
+	<-ch
+	f.Position = 500 * time.Millisecond
+	p.Tick(ctx) // within tolerance: silent
+	select {
+	case s := <-ch:
+		t.Fatalf("small drift should not broadcast: %+v", s.NowPlaying)
+	default:
+	}
+	f.Position = 45 * time.Second // the host dragged the embedded player's own timeline
+	p.Tick(ctx)
+	select {
+	case s := <-ch:
+		if s.NowPlaying.Position != 45*time.Second {
+			t.Fatalf("frame position = %v", s.NowPlaying.Position)
+		}
+	default:
+		t.Fatal("large drift must force a frame")
+	}
+	// seek reports the requested position even though the fake's status is stale
+	f.Position = 45 * time.Second
+	if err := p.Seek(ctx, 10*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if s := <-ch; s.NowPlaying.Position != 10*time.Second || s.Event == nil || s.Event.Type != "seek" {
+		t.Fatalf("seek frame: %+v %+v", s.NowPlaying, s.Event)
+	}
+}

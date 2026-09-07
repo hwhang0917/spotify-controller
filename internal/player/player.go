@@ -17,6 +17,11 @@ import (
 	"github.com/hwhang0917/vibe-music/internal/source"
 )
 
+// driftTolerance is how far the reported position may stray from what clients
+// are interpolating before a frame is forced out (position is otherwise not
+// part of the change signature).
+const driftTolerance = 2 * time.Second
+
 // playGrace is how long after Play() we ignore "nothing loaded" from Status():
 // Spotify's player state lags a poll or two behind the command.
 // ponytail: fixed grace; make it per-source if a backend needs more.
@@ -106,6 +111,10 @@ type Player struct {
 	subs      map[chan State]struct{}
 	lastSig   string
 	pending   *Event // attached to the next broadcast, which is then forced
+	force     bool   // broadcast even if the signature is unchanged (position drift)
+	sentPos   time.Duration
+	sentAt    time.Time
+	sentPlay  bool
 	persist   func([]PersistedItem)
 	lastQueue string
 	onPlay    func(sourceID string, t source.Track)
@@ -178,6 +187,15 @@ func (p *Player) Tick(ctx context.Context) {
 		return // switched while we were polling
 	}
 	p.now = st
+	if st.Track != nil && !p.sentAt.IsZero() {
+		expected := p.sentPos
+		if p.sentPlay {
+			expected += st.At.Sub(p.sentAt)
+		}
+		if d := st.Position - expected; d > driftTolerance || d < -driftTolerance {
+			p.force = true
+		}
+	}
 	idle := st.Track == nil && !st.Playing && time.Since(p.lastPlay) > playGrace
 	if st.Ended || (idle && len(p.queue) > 0) {
 		p.advance(ctx)
@@ -428,11 +446,10 @@ func (p *Player) Seek(ctx context.Context, pos time.Duration) error {
 	if err := p.current.Seek(ctx, pos); err != nil {
 		return err
 	}
-	if st, err := p.current.Status(ctx); err == nil {
-		p.now = st
-	} else {
-		p.now.Position, p.now.At = pos, time.Now()
-	}
+	// Sources report asynchronously (YouTube, Spotify); their status right now
+	// is the pre-seek one. Report the requested position and let the next
+	// poll refine it.
+	p.now.Position, p.now.At = pos, time.Now()
 	p.pending = &Event{Type: "seek", Position: pos}
 	p.broadcastIfChanged()
 	return nil
@@ -723,11 +740,17 @@ func (p *Player) broadcastIfChanged() {
 	}
 	s := p.snapshot()
 	sig := s.signature()
-	if sig == p.lastSig && p.pending == nil {
+	if sig == p.lastSig && p.pending == nil && !p.force {
 		return
 	}
 	p.lastSig = sig
+	p.force = false
 	s.Event, p.pending = p.pending, nil
+	if s.NowPlaying != nil {
+		p.sentPos, p.sentAt, p.sentPlay = s.NowPlaying.Position, s.NowPlaying.At, s.NowPlaying.Playing
+	} else {
+		p.sentAt = time.Time{}
+	}
 	for ch := range p.subs {
 		select {
 		case ch <- s:

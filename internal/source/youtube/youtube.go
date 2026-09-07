@@ -309,6 +309,12 @@ func (s *Source) Stop(context.Context) error {
 }
 
 func (s *Source) Seek(_ context.Context, pos time.Duration) error {
+	s.mu.Lock()
+	// the player will report the new position within a poll; until then
+	// answer with what we asked for so nobody snaps back to the old spot
+	s.report.Position = pos.Seconds()
+	s.at = time.Now()
+	s.mu.Unlock()
 	s.send(Command{Type: "seek", Seconds: pos.Seconds()})
 	return nil
 }
