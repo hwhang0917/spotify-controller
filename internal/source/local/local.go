@@ -50,6 +50,9 @@ var (
 	speakerErr  error
 )
 
+// ErrAudioOutput wraps speaker initialisation failures.
+var ErrAudioOutput = errors.New("audio output")
+
 type entry struct {
 	path    string
 	picture *tag.Picture
@@ -90,7 +93,7 @@ func (s *Source) Activate(ctx context.Context) error {
 		speakerErr = speaker.Init(outputRate, outputRate.N(speakerBuffer))
 	})
 	if speakerErr != nil {
-		return fmt.Errorf("audio output: %w", speakerErr)
+		return fmt.Errorf("%w: %v", ErrAudioOutput, speakerErr)
 	}
 	_, err := s.Rescan()
 	return err

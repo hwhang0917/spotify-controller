@@ -17,7 +17,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Artwork from './Artwork.vue'
 import SpotifyIcon from './SpotifyIcon.vue'
-import { locale, setLocale, t } from './i18n'
+import { toast } from 'vue-sonner'
+import { Toaster } from '@/components/ui/sonner'
+import { locale, setLocale, t, tError } from './i18n'
 import type { Config, Device, GuestInfo, ServerStatus, SourceStatus, State } from './types'
 import { fmtDuration, NS_PER_SEC } from './types'
 
@@ -36,20 +38,19 @@ const folders = ref<string[]>([])
 const volume = ref([100])
 const skipRatio = ref([50])
 const busy = ref('')
-const error = ref('')
-const notice = ref('')
 
-async function run(label: string, fn: () => Promise<unknown>) {
+// Every action reports through toasts: red for failures (translated when the
+// code is known), green for the success message the caller returns.
+async function run(label: string, fn: () => Promise<string | void>, errVars: Record<string, string | number> = {}) {
   busy.value = label
-  error.value = ''
-  notice.value = ''
   try {
-    await fn()
+    const msg = await fn()
+    if (msg) toast.success(msg)
   } catch (e) {
-    error.value = String(e)
+    toast.error(tError(e, errVars))
   } finally {
     busy.value = ''
-    await refresh()
+    await refresh().catch((e) => toast.error(tError(e)))
   }
 }
 
@@ -64,33 +65,55 @@ async function refresh() {
   skipRatio.value = [Math.round(c.skipRatio * 100)]
 }
 
-function saveConfig() {
-  if (!cfg.value) return
-  const c = { ...cfg.value, skipRatio: skipRatio.value[0] / 100, local: { folders: folders.value } }
-  return run('save', () => api.SaveConfig(c))
+function configToSave() {
+  return { ...cfg.value!, skipRatio: skipRatio.value[0] / 100, local: { folders: folders.value } }
 }
+const saveConfig = () => cfg.value && run('save', async () => { await api.SaveConfig(configToSave()); return t('toast.saved') })
 
 // Native directory chooser; saving also rescans so the change is audible right away.
 const addFolder = () => run('pick', async () => {
   const dir = await api.PickFolder()
   if (!dir || folders.value.includes(dir)) return
   folders.value = [...folders.value, dir]
-  await saveConfig()
-  notice.value = t('local.indexed', { n: await api.LocalRescan() })
+  await api.SaveConfig(configToSave())
+  return t('local.indexed', { n: await api.LocalRescan() })
 })
 const removeFolder = (dir: string) => run('remove-folder', async () => {
   folders.value = folders.value.filter((f) => f !== dir)
-  await saveConfig()
-  notice.value = t('local.indexed', { n: await api.LocalRescan() })
+  await api.SaveConfig(configToSave())
+  return t('local.indexed', { n: await api.LocalRescan() })
 })
 
-const toggleServer = () => run('server', () => (server.value.running ? api.StopServer() : api.StartServer(server.value.port)))
-const useSource = (id: string) => run(id, () => api.SetActiveSource(id))
-const rescan = () => run('rescan', async () => { notice.value = t('local.indexed', { n: await api.LocalRescan() }) })
-const connect = () => run('connect', async () => { await saveConfig(); await api.SpotifyConnect(); notice.value = t('spotify.connected') })
-const loadDevices = () => run('devices', async () => { devices.value = await api.SpotifyDevices() })
+const toggleServer = () => run('server', async () => {
+  if (server.value.running) { await api.StopServer(); return t('toast.serverStopped') }
+  const url = await api.StartServer(server.value.port)
+  return t('toast.serverStarted', { url })
+}, { port: server.value.port })
+const useSource = (id: string) => run(id, async () => {
+  await api.SetActiveSource(id)
+  return t('toast.sourceSwitched', { name: sources.value.find((s) => s.id === id)?.name ?? id })
+})
+const rescan = () => run('rescan', async () => t('local.indexed', { n: await api.LocalRescan() }))
+const connect = () => run('connect', async () => {
+  await api.SaveConfig(configToSave())
+  await api.SpotifyConnect()
+  return t('spotify.connected')
+})
+const disconnect = () => run('disconnect', async () => { await api.SpotifyDisconnect(); return t('toast.spotifyDisconnected') })
+const loadDevices = () => run('devices', async () => {
+  devices.value = await api.SpotifyDevices()
+  return t('toast.devicesLoaded', { n: devices.value.length })
+})
 const togglePlay = () => run('play', () => (state.value?.nowPlaying?.playing ? api.Pause() : api.Resume()))
+const skip = () => run('skip', async () => { await api.Skip(); return t('toast.skipped') })
 const setVolume = (v: number[] | undefined) => v && run('volume', () => api.SetVolume(v[0]))
+const removeItem = (id: string) => run('remove-item', async () => { await api.RemoveQueueItem(id); return t('toast.queueRemoved') })
+const kick = (id: string) => run('kick', async () => { await api.KickGuest(id); return t('toast.guestKicked') })
+const removeGuest = (id: string) => run('remove', async () => { await api.RemoveGuest(id); return t('toast.guestRemoved') })
+const block = (g: GuestInfo) => run('block', async () => {
+  await api.BlockGuest(g.id, !g.blocked)
+  return t(g.blocked ? 'toast.guestUnblocked' : 'toast.guestBlocked')
+})
 const isReady = (id: string) => sources.value.find((s) => s.id === id)?.ready ?? false
 
 // keep the volume slider in sync with the player unless the admin is dragging it
@@ -113,7 +136,7 @@ const stops: Array<() => void> = []
 let poll: number | undefined
 let tick: number | undefined
 onMounted(async () => {
-  try { await refresh() } catch (e) { error.value = String(e) }
+  await refresh().catch((e) => toast.error(tError(e)))
   stops.push(EventsOn('state', (s: State) => { state.value = s }))
   stops.push(EventsOn('guests', (g: GuestInfo[]) => { guests.value = g }))
   tick = window.setInterval(() => { now.value = Date.now() }, 500)
@@ -122,8 +145,8 @@ onMounted(async () => {
       const [g, st] = await Promise.all([api.Guests(), api.Status()])
       guests.value = g
       server.value = { ...st, port: server.value.port || st.port }
-    } catch (e) {
-      error.value = String(e)
+    } catch {
+      // transient; the next poll or event will catch up
     }
   }, POLL_MS)
 })
@@ -132,6 +155,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
 
 <template>
   <TooltipProvider>
+    <Toaster position="bottom-right" rich-colors close-button />
     <main class="mx-auto min-h-screen max-w-6xl space-y-6 p-6 lg:p-8">
       <header class="flex items-center justify-between">
         <div>
@@ -139,8 +163,6 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
           <h1 class="text-2xl font-semibold tracking-tight">vibe-music</h1>
         </div>
         <div class="flex items-center gap-3">
-          <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
-          <p v-else-if="notice" class="text-sm text-link">{{ notice }}</p>
           <Badge v-if="server.running" variant="outline" class="gap-1.5">
             <span class="size-1.5 rounded-full bg-link" /><Users />{{ t('server.guests', { n: online }) }}
           </Badge>
@@ -186,7 +208,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                     <Button size="icon-lg" :disabled="!np || !!busy" @click="togglePlay" :aria-label="np?.playing ? t('now.pause') : t('now.resume')">
                       <Pause v-if="np?.playing" /><Play v-else />
                     </Button>
-                    <Button variant="outline" size="icon-lg" :disabled="!np || !!busy" @click="run('skip', api.Skip)" :aria-label="t('now.skip')">
+                    <Button variant="outline" size="icon-lg" :disabled="!np || !!busy" @click="skip" :aria-label="t('now.skip')">
                       <SkipForward />
                     </Button>
                     <Volume2 class="ml-2 size-4 text-muted-foreground" />
@@ -211,7 +233,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                     <Badge variant="outline" class="font-mono tabular-nums"><ChevronUp />{{ it.votes }}</Badge>
                     <Tooltip>
                       <TooltipTrigger as-child>
-                        <Button variant="ghost" size="icon-sm" :disabled="!!busy" @click="run('remove-item', () => api.RemoveQueueItem(it.id))"><X /></Button>
+                        <Button variant="ghost" size="icon-sm" :disabled="!!busy" @click="removeItem(it.id)"><X /></Button>
                       </TooltipTrigger>
                       <TooltipContent>{{ t('queue.remove') }}</TooltipContent>
                     </Tooltip>
@@ -315,7 +337,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                   <Button v-if="!isReady('spotify')" :disabled="!cfg.spotify.clientId || !!busy" @click="connect">
                     {{ busy === 'connect' ? t('spotify.connecting') : t('spotify.connect') }}
                   </Button>
-                  <Button v-else variant="outline" :disabled="!!busy" @click="run('disconnect', api.SpotifyDisconnect)"><Unplug />{{ t('spotify.disconnect') }}</Button>
+                  <Button v-else variant="outline" :disabled="!!busy" @click="disconnect"><Unplug />{{ t('spotify.disconnect') }}</Button>
                   <Button variant="outline" :disabled="!isReady('spotify') || !!busy" @click="loadDevices">{{ t('spotify.devices') }}</Button>
                 </div>
                 <div v-if="devices.length" class="space-y-2">
@@ -369,19 +391,19 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                         <div class="inline-flex gap-1">
                           <Tooltip v-if="g.connections">
                             <TooltipTrigger as-child>
-                              <Button variant="ghost" size="icon-sm" :disabled="!!busy" @click="run('kick', () => api.KickGuest(g.id))"><Unplug /></Button>
+                              <Button variant="ghost" size="icon-sm" :disabled="!!busy" @click="kick(g.id)"><Unplug /></Button>
                             </TooltipTrigger>
                             <TooltipContent>{{ t('guests.kick') }} · {{ t('guests.kickHint') }}</TooltipContent>
                           </Tooltip>
                           <Tooltip v-if="!g.blocked">
                             <TooltipTrigger as-child>
-                              <Button variant="ghost" size="icon-sm" :disabled="!!busy" @click="run('remove', () => api.RemoveGuest(g.id))"><Trash2 /></Button>
+                              <Button variant="ghost" size="icon-sm" :disabled="!!busy" @click="removeGuest(g.id)"><Trash2 /></Button>
                             </TooltipTrigger>
                             <TooltipContent>{{ t('guests.remove') }} · {{ t('guests.removeHint') }}</TooltipContent>
                           </Tooltip>
                           <Tooltip>
                             <TooltipTrigger as-child>
-                              <Button :variant="g.blocked ? 'outline' : 'destructive'" size="sm" :disabled="!!busy" @click="run('block', () => api.BlockGuest(g.id, !g.blocked))">
+                              <Button :variant="g.blocked ? 'outline' : 'destructive'" size="sm" :disabled="!!busy" @click="block(g)">
                                 <Ban />{{ g.blocked ? t('guests.unblock') : t('guests.block') }}
                               </Button>
                             </TooltipTrigger>

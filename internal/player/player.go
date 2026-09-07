@@ -165,7 +165,7 @@ func (p *Player) ActiveSource() source.Source {
 func (p *Player) SetSource(ctx context.Context, id string) error {
 	next, ok := p.sources[id]
 	if !ok {
-		return fmt.Errorf("unknown source %q", id)
+		return fmt.Errorf("unknown_source: %s", id)
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()

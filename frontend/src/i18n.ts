@@ -3,6 +3,27 @@ import { detectLocale, format, saveLocale, type Locale, type Messages } from '..
 
 const messages: Messages = {
   en: {
+    'toast.serverStarted': 'Server started at {url}',
+    'toast.serverStopped': 'Server stopped',
+    'toast.sourceSwitched': 'Now playing from {name}',
+    'toast.saved': 'Settings saved',
+    'toast.spotifyDisconnected': 'Spotify disconnected',
+    'toast.devicesLoaded': '{n} Spotify device(s) found',
+    'toast.guestKicked': 'Guest disconnected',
+    'toast.guestRemoved': 'Guest removed',
+    'toast.guestBlocked': 'Guest blocked',
+    'toast.guestUnblocked': 'Guest unblocked',
+    'toast.skipped': 'Skipped to the next track',
+    'toast.queueRemoved': 'Removed from queue',
+    'err.port_in_use': 'Port {port} is already in use by another program. Pick a different port.',
+    'err.port_denied': 'Port {port} needs administrator rights. Use a port above 1024.',
+    'err.server_running': 'The server is already running.',
+    'err.unknown_source': 'Unknown source: {detail}',
+    'err.audio_output': 'Could not open the audio device. {detail}',
+    'err.spotify_not_connected': 'Spotify is not connected. Press Connect first.',
+    'err.spotify_client_id': 'Enter your Spotify Client ID first.',
+    'err.spotify_no_device': 'No Spotify device found. Open Spotify on this PC and press play once, then try again.',
+    'err.spotify_login_timeout': 'Spotify login was not completed in time. Try Connect again.',
     'tab.server': 'Server',
     'tab.sources': 'Sources',
     'tab.guests': 'Guests',
@@ -72,6 +93,27 @@ const messages: Messages = {
     'guests.blockHint': 'Blocks their browser and drops their requests and votes.',
   },
   ko: {
+    'toast.serverStarted': '서버 시작: {url}',
+    'toast.serverStopped': '서버를 중지했어요',
+    'toast.sourceSwitched': '{name}에서 재생해요',
+    'toast.saved': '설정을 저장했어요',
+    'toast.spotifyDisconnected': 'Spotify 연결을 해제했어요',
+    'toast.devicesLoaded': 'Spotify 기기 {n}개를 찾았어요',
+    'toast.guestKicked': '게스트 연결을 끊었어요',
+    'toast.guestRemoved': '게스트를 제거했어요',
+    'toast.guestBlocked': '게스트를 차단했어요',
+    'toast.guestUnblocked': '게스트 차단을 해제했어요',
+    'toast.skipped': '다음 곡으로 넘어갔어요',
+    'toast.queueRemoved': '대기열에서 제거했어요',
+    'err.port_in_use': '{port} 포트를 이미 다른 프로그램이 사용 중이에요. 다른 포트를 선택해 주세요.',
+    'err.port_denied': '{port} 포트는 관리자 권한이 필요해요. 1024보다 큰 포트를 사용해 주세요.',
+    'err.server_running': '서버가 이미 실행 중이에요.',
+    'err.unknown_source': '알 수 없는 소스: {detail}',
+    'err.audio_output': '오디오 장치를 열 수 없어요. {detail}',
+    'err.spotify_not_connected': 'Spotify가 연결되지 않았어요. 먼저 연결을 눌러 주세요.',
+    'err.spotify_client_id': '먼저 Spotify Client ID를 입력해 주세요.',
+    'err.spotify_no_device': 'Spotify 기기를 찾을 수 없어요. 이 PC에서 Spotify를 열고 한 번 재생한 뒤 다시 시도해 주세요.',
+    'err.spotify_login_timeout': 'Spotify 로그인이 제한 시간 안에 끝나지 않았어요. 다시 연결해 주세요.',
     'tab.server': '서버',
     'tab.sources': '소스',
     'tab.guests': '게스트',
@@ -145,3 +187,12 @@ const messages: Messages = {
 export const locale = ref<Locale>(detectLocale())
 export function setLocale(l: Locale) { locale.value = l; saveLocale(l) }
 export const t = (key: string, vars?: Record<string, string | number>) => format(messages, locale.value, key, vars)
+
+// Go returns well-known failures as "code: detail" (see uiError in app.go).
+// Known codes get a translated message; anything else is shown verbatim.
+export function tError(e: unknown, vars: Record<string, string | number> = {}): string {
+  const raw = String(e instanceof Error ? e.message : e).replace(/^Error:\s*/, '')
+  const [code, ...rest] = raw.split(': ')
+  const detail = rest.join(': ')
+  return messages.en[`err.${code}`] ? t(`err.${code}`, { detail, ...vars }) : raw
+}

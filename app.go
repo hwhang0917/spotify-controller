@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -30,6 +31,51 @@ const (
 	stateEvent  = "state"
 	guestsEvent = "guests"
 )
+
+// UI error codes. The admin UI translates "code: detail"; unknown text is
+// shown as-is. Keep in sync with frontend/src/i18n.ts err.* keys.
+const (
+	errPortInUse     = "port_in_use"
+	errPortDenied    = "port_denied"
+	errServerRunning = "server_running"
+	errUnknownSource = "unknown_source"
+	errAudioOutput   = "audio_output"
+	errSpotifyNoConn = "spotify_not_connected"
+	errSpotifyNoID   = "spotify_client_id"
+	errSpotifyNoDev  = "spotify_no_device"
+	errSpotifyLogin  = "spotify_login_timeout"
+)
+
+// codeErr formats an error as "code: detail" so the UI can translate it.
+func codeErr(code, detail string) error {
+	if detail == "" {
+		return errors.New(code)
+	}
+	return fmt.Errorf("%s: %s", code, detail)
+}
+
+// uiError maps well-known failures to codes; anything else passes through.
+func uiError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, syscall.EADDRINUSE):
+		return codeErr(errPortInUse, "")
+	case errors.Is(err, syscall.EACCES):
+		return codeErr(errPortDenied, "")
+	case errors.Is(err, spotify.ErrNotConnected):
+		return codeErr(errSpotifyNoConn, "")
+	case errors.Is(err, spotify.ErrNoClientID):
+		return codeErr(errSpotifyNoID, "")
+	case errors.Is(err, spotify.ErrNoDevice):
+		return codeErr(errSpotifyNoDev, "")
+	case errors.Is(err, spotify.ErrLoginTimeout):
+		return codeErr(errSpotifyLogin, "")
+	case errors.Is(err, local.ErrAudioOutput):
+		return codeErr(errAudioOutput, err.Error())
+	}
+	return err
+}
 
 // App is the Wails-bound backend for the admin window.
 type App struct {
@@ -188,7 +234,7 @@ func (a *App) Sources() []SourceStatus {
 // SetActiveSource switches backends and remembers the choice.
 func (a *App) SetActiveSource(id string) error {
 	if err := a.player.SetSource(a.ctx, id); err != nil {
-		return err
+		return uiError(err)
 	}
 	a.mu.Lock()
 	a.cfg.ActiveSource = id
@@ -205,11 +251,14 @@ func (a *App) PickFolder() (string, error) {
 }
 
 // SpotifyConnect runs the browser consent flow; blocks until finished.
-func (a *App) SpotifyConnect() error { return a.spotify.Connect(a.ctx) }
+func (a *App) SpotifyConnect() error { return uiError(a.spotify.Connect(a.ctx)) }
 
 func (a *App) SpotifyDisconnect() { a.spotify.Disconnect() }
 
-func (a *App) SpotifyDevices() ([]spotify.Device, error) { return a.spotify.Devices(a.ctx) }
+func (a *App) SpotifyDevices() ([]spotify.Device, error) {
+	d, err := a.spotify.Devices(a.ctx)
+	return d, uiError(err)
+}
 
 // --- guests ---
 
@@ -258,14 +307,14 @@ func (a *App) StartServer(port int) (string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.srv != nil {
-		return a.url, errors.New("server already running")
+		return a.url, codeErr(errServerRunning, "")
 	}
 	if port <= 0 {
 		port = config.DefaultPort
 	}
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		return "", err
+		return "", uiError(err)
 	}
 	srv := &http.Server{Handler: server.NewHandler(web.Dist, a.player, a.guests)}
 	go func() {

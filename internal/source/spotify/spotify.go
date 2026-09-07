@@ -40,8 +40,13 @@ var scopes = []string{
 	spotifyauth.ScopeUserReadCurrentlyPlaying,
 }
 
-// ErrNotConnected means Connect() has not completed (or was disconnected).
-var ErrNotConnected = errors.New("spotify: not connected")
+// Sentinel errors the admin UI maps to translated messages.
+var (
+	ErrNotConnected = errors.New("spotify: not connected")
+	ErrNoClientID   = errors.New("spotify: client ID is empty")
+	ErrNoDevice     = errors.New(noDeviceMessage)
+	ErrLoginTimeout = errors.New("spotify: login not completed")
+)
 
 type Options struct {
 	ClientID string
@@ -129,7 +134,7 @@ func (s *Source) Connect(ctx context.Context) error {
 	open := s.opts.OpenBrowser
 	s.mu.Unlock()
 	if clientID == "" {
-		return errors.New("spotify: client ID is empty")
+		return ErrNoClientID
 	}
 	if open == nil {
 		return errors.New("spotify: no browser opener configured")
@@ -163,7 +168,7 @@ func (s *Source) Connect(ctx context.Context) error {
 	case err := <-errCh:
 		return err
 	case <-ctx.Done():
-		return fmt.Errorf("spotify: login not completed: %w", ctx.Err())
+		return fmt.Errorf("%w: %v", ErrLoginTimeout, ctx.Err())
 	}
 
 	tok, err := cfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
@@ -263,7 +268,7 @@ func (s *Source) Activate(ctx context.Context) error {
 		return err
 	}
 	if len(devs) == 0 {
-		return errors.New(noDeviceMessage)
+		return ErrNoDevice
 	}
 	s.mu.Lock()
 	want := spotify.ID(s.opts.DeviceID)
