@@ -118,6 +118,7 @@ class ApiError extends Error {
 async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
+    cache: 'no-store', // the server says no-store too; belt and braces for aggressive mobile caches
     headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
