@@ -251,3 +251,24 @@ func TestRemoveOwnOrAdmin(t *testing.T) {
 		t.Fatal("queue should be empty")
 	}
 }
+
+func TestDurationLearnedAtPlayIsBroadcast(t *testing.T) {
+	p, f := setup(t)
+	ctx := context.Background()
+	ch, cancel := p.Subscribe()
+	defer cancel()
+	<-ch
+	_ = p.Request(ctx, a, g1) // duration unknown (0) at request time
+	<-ch
+	// the source learns the duration once decoding starts (local files)
+	f.Current.Duration = 3 * time.Minute
+	p.Tick(ctx)
+	select {
+	case s := <-ch:
+		if s.NowPlaying == nil || s.NowPlaying.Track.Duration != 3*time.Minute {
+			t.Fatalf("duration not propagated: %+v", s.NowPlaying)
+		}
+	default:
+		t.Fatal("expected broadcast when duration becomes known")
+	}
+}

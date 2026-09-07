@@ -448,11 +448,12 @@ func (p *Player) snapshot() State {
 }
 
 // signature excludes Position so a playing track does not broadcast every
-// tick; clients interpolate from Position+At of the last frame.
+// tick; clients interpolate from Position+At of the last frame. Duration is
+// included because local files only learn it once decoding starts.
 func (s State) signature() string {
 	sig := fmt.Sprintf("%v|%d|%d|%d|%d|", s.Source, s.SkipVotes, s.SkipThreshold, s.Volume, s.Guests)
 	if s.NowPlaying != nil {
-		sig += fmt.Sprintf("%s|%v|", s.NowPlaying.Track.ID, s.NowPlaying.Playing)
+		sig += fmt.Sprintf("%s|%v|%d|", s.NowPlaying.Track.ID, s.NowPlaying.Playing, s.NowPlaying.Track.Duration)
 	}
 	for _, it := range s.Queue {
 		sig += fmt.Sprintf("%s:%d,", it.ID, it.Votes)
