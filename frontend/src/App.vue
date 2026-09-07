@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ArrowDown, ArrowUp, Ban, Check, ChevronUp, Copy, FolderOpen, FolderPlus, Minus, Pause, Play, Power, RefreshCw, SkipForward, Ticket, Trash2, Unplug, Users, Volume2, X } from '@lucide/vue'
+import { ArrowDown, ArrowUp, Ban, Check, ChevronUp, Copy, FolderOpen, FolderPlus, Minus, Pause, Play, Power, RefreshCw, RotateCw, SkipForward, Ticket, Trash2, Unplug, Users, Volume2, X } from '@lucide/vue'
 import * as api from '../wailsjs/go/main/App'
-import { EventsOn } from '../wailsjs/runtime/runtime'
+import { EventsOn, WindowReload } from '../wailsjs/runtime/runtime'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -156,6 +156,14 @@ const positionMs = computed(() => {
 })
 const online = computed(() => guests.value.filter((g) => g.connections > 0).length)
 
+// The webview has no browser chrome, so F5 / Ctrl+R (Cmd+R) reload by hand.
+function onKey(e: KeyboardEvent) {
+  if (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r')) {
+    e.preventDefault()
+    WindowReload()
+  }
+}
+
 const stops: Array<() => void> = []
 let poll: number | undefined
 let tick: number | undefined
@@ -163,6 +171,7 @@ onMounted(async () => {
   await refresh().catch((e) => toast.error(tError(e)))
   stops.push(EventsOn('state', (s: State) => { state.value = s }))
   stops.push(EventsOn('guests', (g: GuestInfo[]) => { guests.value = g ?? []; api.Invitations().then((i) => { invitations.value = i ?? [] }).catch(() => {}) }))
+  window.addEventListener('keydown', onKey)
   tick = window.setInterval(() => { now.value = Date.now() }, 500)
   poll = window.setInterval(async () => {
     try {
@@ -174,7 +183,7 @@ onMounted(async () => {
     }
   }, POLL_MS)
 })
-onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); window.clearInterval(tick) })
+onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); window.clearInterval(tick); window.removeEventListener('keydown', onKey) })
 </script>
 
 <template>
@@ -193,6 +202,12 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
           <Button :variant="server.running ? 'outline' : 'default'" :disabled="!!busy" @click="toggleServer">
             <Power />{{ server.running ? t('server.stop') : t('server.start') }}
           </Button>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button variant="ghost" size="icon-sm" :aria-label="t('reload')" @click="WindowReload()"><RotateCw /></Button>
+            </TooltipTrigger>
+            <TooltipContent>{{ t('reload') }} · F5</TooltipContent>
+          </Tooltip>
           <Button variant="ghost" size="xs" class="font-mono text-muted-foreground" @click="setLocale(locale === 'en' ? 'ko' : 'en')">
             {{ locale === 'en' ? 'KO' : 'EN' }}
           </Button>
