@@ -19,6 +19,7 @@ import Artwork from './Artwork.vue'
 import SpotifyIcon from './SpotifyIcon.vue'
 import YouTubePlayer from './YouTubePlayer.vue'
 import YouTubeIcon from './YouTubeIcon.vue'
+import HelpTip from './HelpTip.vue'
 import { toast } from 'vue-sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { locale, setLocale, t, tError } from './i18n'
@@ -422,8 +423,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
 
             <Card>
               <CardHeader>
-                <CardTitle class="flex items-center gap-2"><FolderOpen class="size-4" />{{ t('local.title') }}</CardTitle>
-                <CardDescription>{{ t('local.desc') }}</CardDescription>
+                <CardTitle class="flex items-center gap-2"><FolderOpen class="size-4" />{{ t('local.title') }}<HelpTip :text="t('local.help')" /></CardTitle>
               </CardHeader>
               <CardContent class="space-y-3">
                 <ul v-if="folders.length" class="divide-y rounded-md border">
@@ -443,8 +443,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
 
             <Card>
               <CardHeader>
-                <CardTitle class="flex items-center gap-2"><SpotifyIcon />{{ t('spotify.title') }}</CardTitle>
-                <CardDescription>{{ t('spotify.desc') }}</CardDescription>
+                <CardTitle class="flex items-center gap-2"><SpotifyIcon />{{ t('spotify.title') }}<HelpTip :text="t('spotify.help')" /></CardTitle>
               </CardHeader>
               <CardContent class="space-y-4">
                 <div class="space-y-2">
@@ -470,20 +469,16 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                     </SelectContent>
                   </Select>
                 </div>
-                <p class="text-xs text-muted-foreground">
-                  {{ t('spotify.redirect') }} <span class="select-all font-mono text-foreground">http://127.0.0.1/callback</span>
-                </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle class="flex items-center gap-2"><YouTubeIcon />{{ t('youtube.title') }}</CardTitle>
-                <CardDescription>{{ t('youtube.desc') }}</CardDescription>
+                <CardTitle class="flex items-center gap-2"><YouTubeIcon />{{ t('youtube.title') }}<HelpTip :text="t('youtube.help')" /></CardTitle>
               </CardHeader>
               <CardContent class="space-y-3">
                 <div class="space-y-2">
-                  <Label for="ytKey">{{ t('youtube.apiKey') }} <span class="text-muted-foreground">{{ t('youtube.apiKeyHint') }}</span></Label>
+                  <Label for="ytKey">{{ t('youtube.apiKey') }}</Label>
                   <div class="flex gap-2">
                     <Input id="ytKey" v-model="youtubeKey" type="password" class="font-mono text-xs" :placeholder="cfg.youtube.hasKey ? '••••••••' : 'AIza…'" />
                     <Button :disabled="!!busy || (!youtubeKey.trim() && !cfg.youtube.hasKey)" @click="saveYouTubeKey">
@@ -492,7 +487,6 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                   </div>
                   <p v-if="cfg.youtube.hasKey" class="text-xs text-muted-foreground"><Check class="mr-1 inline size-3" />{{ t('youtube.apiKeySet') }}</p>
                 </div>
-                <p class="text-xs text-muted-foreground">{{ t('youtube.playerHint') }}</p>
               </CardContent>
             </Card>
           </TabsContent>
