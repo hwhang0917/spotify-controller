@@ -105,6 +105,16 @@ const connect = () => run('connect', async () => {
   return t('spotify.connected')
 })
 const disconnect = () => run('disconnect', async () => { await api.SpotifyDisconnect(); return t('toast.spotifyDisconnected') })
+// Destructive credential actions confirm first.
+const confirm = ref<{ title: string; body: string; action: () => void } | null>(null)
+function confirmNow() {
+  const c = confirm.value
+  confirm.value = null
+  c?.action()
+}
+const askResetSpotify = () => { confirm.value = { title: t('spotify.resetTitle'), body: t('spotify.resetBody'), action: resetSpotify } }
+const askClearYouTubeKey = () => { confirm.value = { title: t('youtube.clearTitle'), body: t('youtube.clearBody'), action: clearYouTubeKey } }
+
 // Full reset: forget the token, drop the Client ID, and switch Spotify off if it was on.
 const resetSpotify = () => run('spotify-reset', async () => {
   if (sources.value.some((s) => s.id === 'spotify' && s.enabled)) await api.SetSourceEnabled('spotify', false)
@@ -138,9 +148,14 @@ const redirectUri = computed(() => `http://127.0.0.1:${cfg.value?.spotify.callba
 const youtubeKey = ref('')
 const saveYouTubeKey = () => run('yt-key', async () => {
   await api.SetYouTubeAPIKey(youtubeKey.value)
-  const had = youtubeKey.value.trim() !== ''
   youtubeKey.value = ''
-  return t(had ? 'toast.youtubeKeySaved' : 'toast.youtubeKeyCleared')
+  return t('toast.youtubeKeySaved')
+})
+// Removing the key also switches YouTube off, since it cannot search without one.
+const clearYouTubeKey = () => run('yt-key-clear', async () => {
+  if (sources.value.some((s) => s.id === 'youtube' && s.enabled)) await api.SetSourceEnabled('youtube', false)
+  await api.SetYouTubeAPIKey('')
+  return t('toast.youtubeKeyCleared')
 })
 const youtubeEnabled = computed(() => sources.value.some((s) => s.id === 'youtube' && s.enabled))
 const playingSource = computed(() => np.value?.track.source ?? '')
@@ -461,6 +476,19 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
               </div>
             </div>
 
+            <AlertDialog :open="!!confirm" @update:open="(o: boolean) => { if (!o) confirm = null }">
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{{ confirm?.title }}</AlertDialogTitle>
+                  <AlertDialogDescription>{{ confirm?.body }}</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>{{ t('source.cancel') }}</AlertDialogCancel>
+                  <AlertDialogAction class="bg-destructive text-white hover:bg-destructive/90" @click="confirmNow">{{ t('confirm.remove') }}</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
             <AlertDialog :open="!!pending" @update:open="(o: boolean) => { if (!o) pending = null }">
               <AlertDialogContent>
                 <AlertDialogHeader>
@@ -524,7 +552,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                   </template>
                   <Button v-else variant="outline" :disabled="!!busy" @click="disconnect"><Unplug />{{ t('spotify.disconnect') }}</Button>
                   <Button variant="outline" :disabled="!isReady('spotify') || !!busy" @click="loadDevices">{{ t('spotify.devices') }}</Button>
-                  <Button v-if="cfg.spotify.clientId || isReady('spotify')" variant="ghost" class="text-destructive" :disabled="!!busy" @click="resetSpotify"><Trash2 />{{ t('spotify.reset') }}</Button>
+                  <Button v-if="cfg.spotify.clientId || isReady('spotify')" variant="ghost" class="text-destructive" :disabled="!!busy" @click="askResetSpotify"><Trash2 />{{ t('spotify.reset') }}</Button>
                 </div>
                 <div v-if="devices.length" class="space-y-2">
                   <Label>{{ t('spotify.device') }}</Label>
@@ -550,9 +578,8 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                   <Label for="ytKey">{{ t('youtube.apiKey') }}</Label>
                   <div class="flex gap-2">
                     <Input id="ytKey" v-model="youtubeKey" type="password" class="font-mono text-xs" :placeholder="cfg.youtube.hasKey ? '••••••••' : 'AIza…'" />
-                    <Button :disabled="!!busy || (!youtubeKey.trim() && !cfg.youtube.hasKey)" @click="saveYouTubeKey">
-                      {{ youtubeKey.trim() || !cfg.youtube.hasKey ? t('youtube.save') : t('youtube.clear') }}
-                    </Button>
+                    <Button :disabled="!!busy || !youtubeKey.trim()" @click="saveYouTubeKey">{{ t('youtube.save') }}</Button>
+                    <Button v-if="cfg.youtube.hasKey" variant="ghost" class="text-destructive" :disabled="!!busy" @click="askClearYouTubeKey"><Trash2 />{{ t('youtube.clear') }}</Button>
                   </div>
                   <p v-if="cfg.youtube.hasKey" class="text-xs text-muted-foreground"><Check class="mr-1 inline size-3" />{{ t('youtube.apiKeySet') }}</p>
                 </div>
