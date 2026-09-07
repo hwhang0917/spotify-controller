@@ -10,7 +10,7 @@ import (
 
 // log.Println must end up in the file as a JSON line once setupLog ran.
 func TestSetupLogRoutesStdLog(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "x.log")
+	p := filepath.Join(t.TempDir(), "sub", "x.log") // dir is created
 	if err := setupLog(p); err != nil {
 		t.Fatal(err)
 	}

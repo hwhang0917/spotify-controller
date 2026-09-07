@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"log/slog"
 	"net/http"
 	"path"
 	"strings"
@@ -78,8 +79,7 @@ func NewHandler(dist fs.FS, p *player.Player, guests *Guests, top TopFunc, onErr
 	}
 	s := &Server{player: p, guests: guests, top: top, onError: onError}
 	r := chi.NewRouter()
-	// requests go through the app's logger (file + stderr), not chi's colored stdout one
-	r.Use(middleware.RequestLogger(&middleware.DefaultLogFormatter{Logger: log.Default(), NoColor: true}), middleware.Recoverer, noRobots, noStore)
+	r.Use(requestLog, middleware.Recoverer, noRobots, noStore)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -168,9 +168,11 @@ func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&in)
 	if err := s.guests.Redeem(in.Code, id); err != nil {
+		slog.Warn("guest", "action", "join_refused", "guest", id, "ip", r.RemoteAddr)
 		writeError(w, http.StatusForbidden, errInviteBad)
 		return
 	}
+	slog.Info("guest", "action", "join", "guest", id, "ip", r.RemoteAddr)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -280,6 +282,7 @@ func (s *Server) setMe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	slog.Info("guest", "action", "name", "guest", g.ID, "name", name, "ip", r.RemoteAddr)
 	writeJSON(w, http.StatusOK, map[string]string{"id": g.ID, "name": name})
 }
 
@@ -344,34 +347,42 @@ func (s *Server) request(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errTrackNeeded)
 		return
 	}
-	if err := s.player.Request(r.Context(), t, guestFrom(r)); err != nil {
+	g := guestFrom(r)
+	if err := s.player.Request(r.Context(), t, g); err != nil {
 		writeError(w, http.StatusConflict, source.ErrorCode(err, errNoSource))
 		return
 	}
-	writeJSON(w, http.StatusOK, s.stateFor(guestFrom(r)))
+	slog.Info("guest", "action", "request", "guest", g.ID, "name", g.Name, "source", t.Source, "track", t.ID, "title", t.Title)
+	writeJSON(w, http.StatusOK, s.stateFor(g))
 }
 
 func (s *Server) vote(w http.ResponseWriter, r *http.Request) {
-	if err := s.player.Vote(chi.URLParam(r, "id"), guestFrom(r).ID); err != nil {
+	g := guestFrom(r)
+	if err := s.player.Vote(chi.URLParam(r, "id"), g.ID); err != nil {
 		writeError(w, http.StatusNotFound, errNotInQueue)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.stateFor(guestFrom(r)))
+	slog.Info("guest", "action", "vote", "guest", g.ID, "name", g.Name, "item", chi.URLParam(r, "id"))
+	writeJSON(w, http.StatusOK, s.stateFor(g))
 }
 
 func (s *Server) remove(w http.ResponseWriter, r *http.Request) {
-	switch err := s.player.Remove(chi.URLParam(r, "id"), guestFrom(r).ID, false); {
+	g := guestFrom(r)
+	switch err := s.player.Remove(chi.URLParam(r, "id"), g.ID, false); {
 	case errors.Is(err, player.ErrNotOwner):
 		writeError(w, http.StatusForbidden, errNotOwner)
 	case err != nil:
 		writeError(w, http.StatusNotFound, errNotInQueue)
 	default:
-		writeJSON(w, http.StatusOK, s.stateFor(guestFrom(r)))
+		slog.Info("guest", "action", "remove", "guest", g.ID, "name", g.Name, "item", chi.URLParam(r, "id"))
+		writeJSON(w, http.StatusOK, s.stateFor(g))
 	}
 }
 
 func (s *Server) skip(w http.ResponseWriter, r *http.Request) {
-	skipped := s.player.VoteSkip(r.Context(), guestFrom(r).ID)
+	g := guestFrom(r)
+	skipped := s.player.VoteSkip(r.Context(), g.ID)
+	slog.Info("guest", "action", "skip_vote", "guest", g.ID, "name", g.Name, "skipped", skipped)
 	writeJSON(w, http.StatusOK, map[string]any{"skipped": skipped, "state": s.player.State()})
 }
 
@@ -410,6 +421,21 @@ func (s *Server) sourceErr(err error) string {
 
 // noStore keeps phones from running a stale build: the API and the SPA shell
 // are never cached. Hashed assets under /assets/ stay cacheable.
+// requestLog writes one structured line per request (static assets excluded)
+// to the app log for observability; handlers add who-did-what audit lines.
+func requestLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		start := time.Now()
+		next.ServeHTTP(ww, r)
+		if strings.HasPrefix(r.URL.Path, "/assets/") {
+			return
+		}
+		slog.Info("http", "method", r.Method, "path", r.URL.RequestURI(), "status", ww.Status(),
+			"bytes", ww.BytesWritten(), "ms", time.Since(start).Milliseconds(), "ip", r.RemoteAddr, "ua", r.UserAgent())
+	})
+}
+
 func noStore(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/assets/") {

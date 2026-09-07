@@ -779,6 +779,14 @@ func (s State) signature() string {
 	return sig
 }
 
+// Announce attaches a one-shot Event to the next state frame (and sends it).
+func (p *Player) Announce(ev Event) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pending = &ev
+	p.broadcastIfChanged()
+}
+
 func (p *Player) broadcastIfChanged() {
 	if q := p.queueSig(); q != p.lastQueue {
 		p.lastQueue = q

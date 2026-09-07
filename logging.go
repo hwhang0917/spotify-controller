@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 )
 
 const (
@@ -16,6 +17,9 @@ const (
 // ponytail: one previous file kept when the current one passes logMaxBytes;
 // a size-based rotator if the log ever needs history.
 func setupLog(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
 	if st, err := os.Stat(path); err == nil && st.Size() > logMaxBytes {
 		_ = os.Rename(path, path+".1")
 	}
@@ -23,6 +27,8 @@ func setupLog(path string) error {
 	if err != nil {
 		return err
 	}
-	slog.SetDefault(slog.New(slog.NewJSONHandler(io.MultiWriter(os.Stderr, f), nil)))
+	// File first: a windowsgui exe has no console, its stderr write fails, and
+	// MultiWriter stops at the first failing writer.
+	slog.SetDefault(slog.New(slog.NewJSONHandler(io.MultiWriter(f, os.Stderr), nil)))
 	return nil
 }

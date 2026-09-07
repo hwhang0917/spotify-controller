@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -168,6 +170,11 @@ type SourceStatus struct {
 
 func NewApp() *App { return &App{} }
 
+// audit logs an admin action; guest actions are logged by the server package.
+func (a *App) audit(action string, kv ...any) {
+	slog.Info("admin", append([]any{"action", action}, kv...)...)
+}
+
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	dir, err := config.Dir()
@@ -178,6 +185,7 @@ func (a *App) startup(ctx context.Context) {
 	if err := setupLog(a.info.LogPath); err != nil {
 		log.Println("log file:", err)
 	}
+	slog.Info("startup", "dataDir", dir)
 	a.db, err = store.Open(a.info.DBPath)
 	if err != nil {
 		log.Fatal(err)
@@ -370,6 +378,7 @@ func (a *App) GetConfig() config.Config {
 // SaveConfig persists and applies settings. Changing the Spotify Client ID
 // requires SpotifyConnect afterwards. InviteOnly is toggled via SetInviteOnly.
 func (a *App) SaveConfig(c config.Config) error {
+	a.audit("save_config", "port", c.Port, "skipRatio", c.SkipRatio, "inviteOnly", c.InviteOnly, "enabled", c.Enabled, "folders", len(c.Local.Folders))
 	if c.Local.Folders == nil {
 		c.Local.Folders = []string{}
 	}
@@ -427,6 +436,7 @@ func (a *App) Sources() []SourceStatus {
 // on any source while Spotify is on turns Spotify off; the UI confirms both.
 // Turning a source off stops it if playing and drops its queued items.
 func (a *App) SetSourceEnabled(id string, enabled bool) error {
+	a.audit("set_source", "source", id, "enabled", enabled)
 	if _, ok := a.sourceByID(id); !ok {
 		return codeErr(errUnknownSource, id)
 	}
@@ -457,7 +467,7 @@ func (a *App) sourceByID(id string) (player.SourceInfo, bool) {
 	return player.SourceInfo{}, false
 }
 
-func (a *App) LocalRescan() (int, error) { return a.local.Rescan() }
+func (a *App) LocalRescan() (int, error) { a.audit("local_rescan"); return a.local.Rescan() }
 
 // PickFolder opens the OS directory chooser. Returns "" when cancelled.
 func (a *App) PickFolder() (string, error) {
@@ -465,9 +475,12 @@ func (a *App) PickFolder() (string, error) {
 }
 
 // SpotifyConnect runs the browser consent flow; blocks until finished.
-func (a *App) SpotifyConnect() error { return uiError(a.spotify.Connect(a.ctx)) }
+func (a *App) SpotifyConnect() error {
+	a.audit("spotify_connect")
+	return uiError(a.spotify.Connect(a.ctx))
+}
 
-func (a *App) SpotifyDisconnect() { a.spotify.Disconnect() }
+func (a *App) SpotifyDisconnect() { a.audit("spotify_disconnect"); a.spotify.Disconnect() }
 
 // SpotifyRedirectURI is the exact URI to register in the Spotify dashboard.
 func (a *App) SpotifyRedirectURI() string { return a.spotify.RedirectURI() }
@@ -479,6 +492,7 @@ func (a *App) SpotifyCancelConnect() { a.spotify.CancelConnect() }
 // its queued songs), deletes the saved token, and clears the stored Client ID
 // and device. One call so nothing is left half-done.
 func (a *App) SpotifyReset() error {
+	a.audit("spotify_reset")
 	if a.player.Enabled(a.spotify.ID()) {
 		if err := a.SetSourceEnabled(a.spotify.ID(), false); err != nil {
 			return err
@@ -507,6 +521,7 @@ func (a *App) Guests() ([]server.GuestInfo, error) { return a.guests.List() }
 // SetInviteOnly toggles invitation-only access. Turning it on keeps everyone
 // already known admitted; newcomers need a code.
 func (a *App) SetInviteOnly(on bool) error {
+	a.audit("invite_only", "on", on)
 	if err := a.guests.SetInviteOnly(on); err != nil {
 		return err
 	}
@@ -517,11 +532,12 @@ func (a *App) SetInviteOnly(on bool) error {
 }
 
 // AdmitGuest lets a specific guest in without a code.
-func (a *App) AdmitGuest(id string) error { return a.guests.Admit(id) }
+func (a *App) AdmitGuest(id string) error { a.audit("admit", "guest", id); return a.guests.Admit(id) }
 
 // CreateInvitation makes a code valid for ttlMinutes; the plaintext is only
 // available in the returned value and in this session's list.
 func (a *App) CreateInvitation(ttlMinutes int) (server.Invitation, error) {
+	a.audit("invitation_create", "ttlMinutes", ttlMinutes)
 	if ttlMinutes <= 0 {
 		return server.Invitation{}, errors.New("ttl must be positive")
 	}
@@ -530,13 +546,17 @@ func (a *App) CreateInvitation(ttlMinutes int) (server.Invitation, error) {
 
 func (a *App) Invitations() ([]server.Invitation, error) { return a.guests.Invitations() }
 
-func (a *App) RevokeInvitation(id int64) error { return a.guests.RevokeInvitation(id) }
+func (a *App) RevokeInvitation(id int64) error {
+	a.audit("invitation_revoke", "id", id)
+	return a.guests.RevokeInvitation(id)
+}
 
 // KickGuest drops the guest's live connections; they can reconnect.
-func (a *App) KickGuest(id string) { a.guests.Kick(id) }
+func (a *App) KickGuest(id string) { a.audit("kick", "guest", id); a.guests.Kick(id) }
 
 // RemoveGuest forgets the guest and everything they queued or voted for.
 func (a *App) RemoveGuest(id string) error {
+	a.audit("remove_guest", "guest", id)
 	a.player.RemoveGuest(id)
 	return a.guests.Remove(id)
 }
@@ -544,6 +564,7 @@ func (a *App) RemoveGuest(id string) error {
 // BlockGuest toggles the (persisted) block. Blocking also removes the guest's
 // requests and votes.
 func (a *App) BlockGuest(id string, blocked bool) error {
+	a.audit("block", "guest", id, "blocked", blocked)
 	if blocked {
 		a.player.RemoveGuest(id)
 	}
@@ -553,13 +574,20 @@ func (a *App) BlockGuest(id string, blocked bool) error {
 // --- queue (admin override) ---
 
 // RemoveQueueItem drops any queued item regardless of who requested it.
-func (a *App) RemoveQueueItem(id string) error { return a.player.Remove(id, "", true) }
+func (a *App) RemoveQueueItem(id string) error {
+	a.audit("queue_remove", "item", id)
+	return a.player.Remove(id, "", true)
+}
 
 // MoveQueueItem places a queued item at index (0 = next up).
-func (a *App) MoveQueueItem(id string, index int) error { return a.player.Move(id, index) }
+func (a *App) MoveQueueItem(id string, index int) error {
+	a.audit("queue_move", "item", id, "index", index)
+	return a.player.Move(id, index)
+}
 
 // Seek moves the current track to the given millisecond offset.
 func (a *App) Seek(ms int) error {
+	a.audit("seek", "ms", ms)
 	return uiError(a.player.Seek(a.ctx, time.Duration(ms)*time.Millisecond))
 }
 
@@ -567,6 +595,7 @@ func (a *App) Seek(ms int) error {
 
 // SetYouTubeAPIKey stores the Data API key (empty removes it).
 func (a *App) SetYouTubeAPIKey(key string) error {
+	a.audit("youtube_key", "set", strings.TrimSpace(key) != "") // never the key itself
 	if err := youtube.ValidateAPIKey(key); err != nil {
 		return uiError(err)
 	}
@@ -587,20 +616,28 @@ func (a *App) YouTubeTest(region string) (string, error) {
 func (a *App) YouTubeReport(r youtube.Report) { a.youtube.Report(r) }
 
 // ResetPlayHistory clears the "most played" lists for every source.
-func (a *App) ResetPlayHistory() error { return a.db.ClearPlays() }
+func (a *App) ResetPlayHistory() error {
+	a.audit("reset_play_history")
+	if err := a.db.ClearPlays(); err != nil {
+		return err
+	}
+	a.player.Announce(player.Event{Type: "history_reset"}) // guests reload their most-played list
+	return nil
+}
 
 // --- playback (admin override) ---
 
 func (a *App) GetState() player.State  { return a.player.State() }
-func (a *App) Pause() error            { return a.player.Pause(a.ctx) }
-func (a *App) Resume() error           { return a.player.Resume(a.ctx) }
-func (a *App) Skip()                   { a.player.Skip(a.ctx) }
+func (a *App) Pause() error            { a.audit("pause"); return a.player.Pause(a.ctx) }
+func (a *App) Resume() error           { a.audit("resume"); return a.player.Resume(a.ctx) }
+func (a *App) Skip()                   { a.audit("skip"); a.player.Skip(a.ctx) }
 func (a *App) SetVolume(pct int) error { return a.player.SetVolume(a.ctx, pct) }
 
 // --- guest server ---
 
 // StartServer starts the guest HTTP server and returns the LAN URL to share.
 func (a *App) StartServer(port int) (string, error) {
+	a.audit("server_start", "port", port)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.srv != nil {
@@ -632,6 +669,7 @@ func (a *App) StartServer(port int) (string, error) {
 
 // StopServer gracefully shuts the guest server down. No-op if not running.
 func (a *App) StopServer() error {
+	a.audit("server_stop")
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.srv == nil {

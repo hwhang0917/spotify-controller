@@ -145,6 +145,7 @@ async function act(fn: () => Promise<string | void>) {
 // Host actions arrive as a one-shot event on a state frame.
 function announce(ev: State['event']) {
   if (!ev) return
+  if (ev.type === 'history_reset') loadTop()
   toast.info(t(`toast.${ev.type}`, { title: ev.title ?? '', pos: fmtDuration(ev.position ?? 0) }))
 }
 
