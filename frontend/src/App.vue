@@ -446,31 +446,31 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
 
           <!-- Sources -->
           <TabsContent value="sources" class="space-y-4">
-            <div class="grid gap-3 sm:grid-cols-3">
-              <div
+            <ul class="divide-y overflow-hidden rounded-lg border bg-card">
+              <li
                 v-for="s in sources" :key="s.id"
-                class="rounded-lg border bg-card p-4 transition-colors"
-                :class="[s.enabled ? 'border-primary' : '', s.enabled || s.wanted ? '' : 'opacity-60']"
+                class="flex items-center gap-4 px-4 py-3"
+                :class="s.enabled || s.wanted ? '' : 'opacity-60'"
               >
-                <div class="flex items-center justify-between gap-2">
-                  <span class="flex min-w-0 items-center gap-2 font-medium">
-                    <SpotifyIcon v-if="s.id === 'spotify'" /><YouTubeIcon v-else-if="s.id === 'youtube'" /><FolderOpen v-else class="size-4 text-muted-foreground" />
-                    <span class="truncate">{{ s.name }}</span>
-                  </span>
-                  <label class="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                    {{ t('source.use') }}
-                    <Switch size="sm" :model-value="s.enabled || s.wanted" :disabled="!!busy || (!s.enabled && !s.wanted && !s.ready)" @update:model-value="(on: boolean) => toggleEnabled(s, on)" />
-                  </label>
+                <span class="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted">
+                  <SpotifyIcon v-if="s.id === 'spotify'" /><YouTubeIcon v-else-if="s.id === 'youtube'" /><FolderOpen v-else class="size-4 text-muted-foreground" />
+                </span>
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="font-medium">{{ s.name }}</span>
+                    <Badge :variant="s.enabled ? 'default' : s.wanted ? 'destructive' : s.ready ? 'secondary' : 'outline'">
+                      {{ s.enabled ? t('source.on') : s.wanted ? t('source.failed') : s.ready ? t('source.ready') : t('source.setup') }}
+                    </Badge>
+                    <Badge v-if="s.exclusive" variant="outline">{{ t('source.exclusive') }}</Badge>
+                  </div>
+                  <p class="truncate text-xs text-muted-foreground">{{ s.detail }}</p>
                 </div>
-                <div class="mt-3 flex items-center justify-between gap-2">
-                  <Badge :variant="s.enabled ? 'default' : s.wanted ? 'destructive' : s.ready ? 'secondary' : 'outline'">
-                    {{ s.enabled ? t('source.on') : s.wanted ? t('source.failed') : s.ready ? t('source.ready') : t('source.setup') }}
-                  </Badge>
-                  <span v-if="s.exclusive" class="text-xs text-muted-foreground">{{ t('source.exclusive') }}</span>
-                </div>
-                <p class="mt-2 truncate text-xs text-muted-foreground">{{ s.detail }}</p>
-              </div>
-            </div>
+                <label class="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                  {{ t('source.use') }}
+                  <Switch :model-value="s.enabled || s.wanted" :disabled="!!busy || (!s.enabled && !s.wanted && !s.ready)" @update:model-value="(on: boolean) => toggleEnabled(s, on)" />
+                </label>
+              </li>
+            </ul>
 
             <AlertDialog :open="!!confirm" @update:open="(o: boolean) => { if (!o) confirm = null }">
               <AlertDialogContent>
