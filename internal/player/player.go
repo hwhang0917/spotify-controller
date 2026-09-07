@@ -345,6 +345,40 @@ func (p *Player) Chart(ctx context.Context, sourceID, region string, limit int) 
 	return ch.Chart(ctx, region, limit)
 }
 
+// browser returns the enabled source as a Browser, or why it cannot browse.
+func (p *Player) browser(sourceID string) (source.Browser, error) {
+	p.mu.Lock()
+	src, ok := p.sources[sourceID]
+	enabled := p.enabled[sourceID]
+	p.mu.Unlock()
+	if !ok || !enabled {
+		return nil, ErrNoSource
+	}
+	b, ok := src.(source.Browser)
+	if !ok {
+		return nil, source.ErrNotFound
+	}
+	return b, nil
+}
+
+// Artist shows a source's artist page.
+func (p *Player) Artist(ctx context.Context, sourceID, id string) (source.Artist, error) {
+	b, err := p.browser(sourceID)
+	if err != nil {
+		return source.Artist{}, err
+	}
+	return b.Artist(ctx, id)
+}
+
+// Album shows a source's album page.
+func (p *Player) Album(ctx context.Context, sourceID, id string) (source.Album, error) {
+	b, err := p.browser(sourceID)
+	if err != nil {
+		return source.Album{}, err
+	}
+	return b.Album(ctx, id)
+}
+
 // Request queues a track. The same song may be queued more than once; each
 // request is its own entry. If nothing is playing the track starts right away.
 func (p *Player) Request(ctx context.Context, t source.Track, g Guest) error {

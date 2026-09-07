@@ -162,3 +162,49 @@ func (f *Source) Played() []string {
 	}
 	return ids
 }
+
+// Artist implements source.Browser over Library by ArtistID.
+func (f *Source) Artist(_ context.Context, id string) (source.Artist, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.log("artist:" + id); err != nil {
+		return source.Artist{}, err
+	}
+	a := source.Artist{ID: id}
+	seen := map[string]bool{}
+	for _, t := range f.Library {
+		if t.ArtistID != id {
+			continue
+		}
+		a.Name = t.Artist
+		a.Tracks = append(a.Tracks, t)
+		if t.AlbumID != "" && !seen[t.AlbumID] {
+			seen[t.AlbumID] = true
+			a.Albums = append(a.Albums, source.Album{ID: t.AlbumID, Name: t.Album, Artist: t.Artist, ArtistID: id, Year: t.Year})
+		}
+	}
+	if len(a.Tracks) == 0 {
+		return source.Artist{}, source.ErrNotFound
+	}
+	return a, nil
+}
+
+// Album implements source.Browser over Library by AlbumID.
+func (f *Source) Album(_ context.Context, id string) (source.Album, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.log("album:" + id); err != nil {
+		return source.Album{}, err
+	}
+	a := source.Album{ID: id}
+	for _, t := range f.Library {
+		if t.AlbumID == id {
+			a.Name, a.Artist, a.ArtistID, a.Year = t.Album, t.Artist, t.ArtistID, t.Year
+			a.Tracks = append(a.Tracks, t)
+		}
+	}
+	if len(a.Tracks) == 0 {
+		return source.Album{}, source.ErrNotFound
+	}
+	return a, nil
+}

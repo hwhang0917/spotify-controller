@@ -6,6 +6,7 @@ package source
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 )
 
@@ -25,6 +26,10 @@ type Track struct {
 	ArtworkURL string `json:"artworkUrl,omitempty"`
 	// ExternalURL links back to the provider (Spotify attribution requirement). Empty for local.
 	ExternalURL string `json:"externalUrl,omitempty"`
+	// ArtistID and AlbumID are browse keys for Browser sources; empty means
+	// the guest UI shows plain text instead of a link.
+	ArtistID string `json:"artistId,omitempty"`
+	AlbumID  string `json:"albumId,omitempty"`
 }
 
 // Playback is a snapshot of what the source is doing right now.
@@ -67,6 +72,48 @@ type Source interface {
 // code such as "KR"; sources may ignore it.
 type Charter interface {
 	Chart(ctx context.Context, region string, limit int) ([]Track, error)
+}
+
+// Browser is optional: sources that can show an artist or an album page.
+type Browser interface {
+	Artist(ctx context.Context, id string) (Artist, error)
+	Album(ctx context.Context, id string) (Album, error)
+}
+
+// Artist is an artist page: its tracks (top or all) and albums (Tracks nil).
+type Artist struct {
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	ArtworkURL string  `json:"artworkUrl,omitempty"`
+	Tracks     []Track `json:"tracks"`
+	Albums     []Album `json:"albums"`
+}
+
+// Album is an album page, or an album reference inside an Artist (no Tracks).
+type Album struct {
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	Artist     string  `json:"artist"`
+	ArtistID   string  `json:"artistId,omitempty"`
+	Year       int     `json:"year,omitempty"`
+	ArtworkURL string  `json:"artworkUrl,omitempty"`
+	Tracks     []Track `json:"tracks,omitempty"`
+}
+
+// ErrNotFound: no such artist/album at this source (or the source has no pages).
+var ErrNotFound = &CodedError{Kind: "not_found", Msg: "not found"}
+
+// YearOf reads the year from a date string such as "2019-04-01" or
+// "2019-04-01T10:00:00Z"; 0 when it has none.
+func YearOf(date string) int {
+	if len(date) < 4 {
+		return 0
+	}
+	y, err := strconv.Atoi(date[:4])
+	if err != nil {
+		return 0
+	}
+	return y
 }
 
 // ArtworkProvider is optional. Sources whose artwork is not a public URL

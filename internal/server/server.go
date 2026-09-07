@@ -95,6 +95,8 @@ func NewHandler(dist fs.FS, p *player.Player, guests *Guests, top TopFunc, onErr
 			r.Get("/search", s.search)
 			r.Get("/top", s.topTracks)
 			r.Get("/chart", s.chart)
+			r.Get("/artist", s.artist)
+			r.Get("/album", s.album)
 			r.Get("/artwork/{source}/{id}", s.artwork)
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireName)
@@ -408,6 +410,45 @@ func (s *Server) artwork(w http.ResponseWriter, r *http.Request) {
 // sourceErr turns a source failure into what the guest UI shows: a known
 // code, or "search_failed: <provider message>" so nothing is hidden. Either
 // way the host log gets the full error.
+// artist and album serve a source's browse pages (?source=&id=).
+func (s *Server) artist(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	a, err := s.player.Artist(r.Context(), q.Get("source"), q.Get("id"))
+	if q.Get("id") == "" || err != nil {
+		s.browseError(w, err)
+		return
+	}
+	if a.Tracks == nil {
+		a.Tracks = []source.Track{}
+	}
+	if a.Albums == nil {
+		a.Albums = []source.Album{}
+	}
+	writeJSON(w, http.StatusOK, a)
+}
+
+func (s *Server) album(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	a, err := s.player.Album(r.Context(), q.Get("source"), q.Get("id"))
+	if q.Get("id") == "" || err != nil {
+		s.browseError(w, err)
+		return
+	}
+	if a.Tracks == nil {
+		a.Tracks = []source.Track{}
+	}
+	writeJSON(w, http.StatusOK, a)
+}
+
+// browseError: a missing page is a plain 404; anything else is the source failing.
+func (s *Server) browseError(w http.ResponseWriter, err error) {
+	if err == nil || source.ErrorCode(err, "") == source.ErrNotFound.Kind {
+		writeError(w, http.StatusNotFound, source.ErrNotFound.Kind)
+		return
+	}
+	writeError(w, http.StatusBadGateway, s.sourceErr(err))
+}
+
 func (s *Server) sourceErr(err error) string {
 	log.Println("source:", err)
 	if s.onError != nil {

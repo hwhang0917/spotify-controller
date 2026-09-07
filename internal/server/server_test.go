@@ -430,3 +430,34 @@ func TestInviteOnly(t *testing.T) {
 		t.Fatalf("open mode: %d", res.StatusCode)
 	}
 }
+
+func TestBrowse(t *testing.T) {
+	ts, f, _ := newTestServer(t)
+	f.Library = []source.Track{
+		{Source: "fake", ID: "a", Title: "Alpha", Artist: "X", ArtistID: "x", Album: "One", AlbumID: "y", Year: 1999},
+		{Source: "fake", ID: "b", Title: "Beta", Artist: "X", ArtistID: "x", Album: "One", AlbumID: "y", Year: 1999},
+		{Source: "fake", ID: "c", Title: "Gamma", Artist: "Z", ArtistID: "z"},
+	}
+	c := newClient(t, ts.URL)
+	res, out := c.do("GET", "/api/artist?source=fake&id=x", "")
+	if res.StatusCode != 200 || out["name"] != "X" || len(out["tracks"].([]any)) != 2 || len(out["albums"].([]any)) != 1 {
+		t.Fatalf("artist: %d %v", res.StatusCode, out)
+	}
+	res, out = c.do("GET", "/api/artist?source=fake&id=z", "")
+	if res.StatusCode != 200 || len(out["albums"].([]any)) != 0 { // no album: [] not null
+		t.Fatalf("artist without albums: %d %v", res.StatusCode, out)
+	}
+	res, out = c.do("GET", "/api/album?source=fake&id=y", "")
+	if res.StatusCode != 200 || out["artist"] != "X" || out["year"] != 1999.0 || len(out["tracks"].([]any)) != 2 {
+		t.Fatalf("album: %d %v", res.StatusCode, out)
+	}
+	if res, out = c.do("GET", "/api/album?source=fake&id=nope", ""); res.StatusCode != 404 || out["error"] != "not_found" {
+		t.Fatalf("unknown album: %d %v", res.StatusCode, out)
+	}
+	if res, _ = c.do("GET", "/api/artist?source=fake", ""); res.StatusCode != 404 {
+		t.Fatalf("missing id: %d", res.StatusCode)
+	}
+	if res, out = c.do("GET", "/api/artist?source=other&id=x", ""); res.StatusCode != 502 || out["error"] != "no_source" {
+		t.Fatalf("disabled source: %d %v", res.StatusCode, out)
+	}
+}
