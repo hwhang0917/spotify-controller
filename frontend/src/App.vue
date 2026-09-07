@@ -113,6 +113,8 @@ function confirmNow() {
   c?.action()
 }
 const askResetSpotify = () => { confirm.value = { title: t('spotify.resetTitle'), body: t('spotify.resetBody'), action: resetSpotify } }
+const resetHistory = () => run('reset-history', async () => { await api.ResetPlayHistory(); return t('toast.historyReset') })
+const askResetHistory = () => { confirm.value = { title: t('history.resetTitle'), body: t('history.resetBody'), action: resetHistory } }
 const askClearYouTubeKey = () => { confirm.value = { title: t('youtube.clearTitle'), body: t('youtube.clearBody'), action: clearYouTubeKey } }
 
 // Full reset happens in Go (token, Client ID, device, source off) so the
@@ -395,6 +397,13 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                     <span class="font-mono text-sm tabular-nums">{{ skipRatio[0] }}%</span>
                   </div>
                   <Slider v-model="skipRatio" :min="10" :max="100" :step="10" @value-commit="saveConfig" />
+                </div>
+                <div class="flex items-center justify-between gap-3 border-t pt-4">
+                  <div class="min-w-0">
+                    <Label>{{ t('history.title') }}</Label>
+                    <p class="text-xs text-muted-foreground">{{ t('history.desc') }}</p>
+                  </div>
+                  <Button variant="outline" size="sm" class="shrink-0 text-destructive" :disabled="!!busy" @click="askResetHistory"><Trash2 />{{ t('history.reset') }}</Button>
                 </div>
               </CardContent>
             </Card>

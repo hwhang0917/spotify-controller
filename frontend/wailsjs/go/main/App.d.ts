@@ -34,3 +34,4 @@ export function SetSourceEnabled(arg1: string, arg2: boolean): Promise<void>;
 export function SpotifyCancelConnect(): Promise<void>;
 export function SpotifyRedirectURI(): Promise<string>;
 export function SpotifyReset(): Promise<void>;
+export function ResetPlayHistory(): Promise<void>;

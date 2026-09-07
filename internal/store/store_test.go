@@ -144,4 +144,10 @@ func TestPlayHistory(t *testing.T) {
 	if top, _ := s.TopTracks("youtube", 10); len(top) != 0 {
 		t.Fatal("other source should be empty")
 	}
+	if err := s.ClearPlays(); err != nil {
+		t.Fatal(err)
+	}
+	if top, _ := s.TopTracks("local", 10); len(top) != 0 {
+		t.Fatalf("history should be gone: %s", top)
+	}
 }

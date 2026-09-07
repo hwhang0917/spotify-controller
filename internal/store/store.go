@@ -327,6 +327,12 @@ func (s *Store) RecordPlay(sourceID, trackID string, track json.RawMessage, at t
 	return err
 }
 
+// ClearPlays forgets the play history (all sources).
+func (s *Store) ClearPlays() error {
+	_, err := s.db.Exec(`DELETE FROM plays`)
+	return err
+}
+
 // TopTracks returns the most played tracks of a source, ties broken by recency.
 func (s *Store) TopTracks(sourceID string, limit int) ([]json.RawMessage, error) {
 	rows, err := s.db.Query(`SELECT track FROM plays WHERE source = ? ORDER BY count DESC, last_played DESC LIMIT ?`, sourceID, limit)

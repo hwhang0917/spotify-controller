@@ -564,6 +564,9 @@ func (a *App) SetYouTubeAPIKey(key string) error {
 // YouTubeReport receives the embedded player's state from the admin page.
 func (a *App) YouTubeReport(r youtube.Report) { a.youtube.Report(r) }
 
+// ResetPlayHistory clears the "most played" lists for every source.
+func (a *App) ResetPlayHistory() error { return a.db.ClearPlays() }
+
 // --- playback (admin override) ---
 
 func (a *App) GetState() player.State  { return a.player.State() }

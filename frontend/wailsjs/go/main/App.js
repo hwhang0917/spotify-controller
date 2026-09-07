@@ -35,3 +35,4 @@ export function SetSourceEnabled(arg1, arg2) { return app()['SetSourceEnabled'](
 export function SpotifyCancelConnect() { return app()['SpotifyCancelConnect'](); }
 export function SpotifyRedirectURI() { return app()['SpotifyRedirectURI'](); }
 export function SpotifyReset() { return app()['SpotifyReset'](); }
+export function ResetPlayHistory() { return app()['ResetPlayHistory'](); }
