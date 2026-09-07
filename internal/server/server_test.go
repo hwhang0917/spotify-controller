@@ -371,16 +371,16 @@ func TestInviteOnly(t *testing.T) {
 	if res, out := lee.do("GET", "/api/me", ""); res.StatusCode != 403 || out["error"] != "invite_required" {
 		t.Fatalf("newcomer: %d %v", res.StatusCode, out)
 	}
-	if res, _ := lee.do("GET", "/join?invitationCode=NOPE-NOPE", ""); res.StatusCode != 302 || res.Header.Get("Location") != invalidURL {
-		t.Fatalf("bad code: %d %s", res.StatusCode, res.Header.Get("Location"))
+	if res, out := lee.do("POST", "/api/join", `{"code":"NOPE-NOPE"}`); res.StatusCode != 403 || out["error"] != "invite_invalid" {
+		t.Fatalf("bad code: %d %v", res.StatusCode, out)
 	}
 
 	inv, err := guests.CreateInvitation(time.Hour)
 	if err != nil || inv.Code == "" || inv.Label != inv.Code[len(inv.Code)-4:] {
 		t.Fatalf("create: %+v %v", inv, err)
 	}
-	if res, _ := lee.do("GET", "/join?invitationCode="+inv.Code, ""); res.StatusCode != 302 || res.Header.Get("Location") != "/" {
-		t.Fatalf("good code: %d %s", res.StatusCode, res.Header.Get("Location"))
+	if res, _ := lee.do("POST", "/api/join", `{"code":"`+inv.Code+`"}`); res.StatusCode != 200 {
+		t.Fatalf("good code: %d", res.StatusCode)
 	}
 	if res, _ := lee.do("GET", "/api/me", ""); res.StatusCode != 200 {
 		t.Fatalf("admitted guest: %d", res.StatusCode)
@@ -389,27 +389,37 @@ func TestInviteOnly(t *testing.T) {
 	if len(list) != 1 || list[0].Uses != 1 || list[0].Code != inv.Code {
 		t.Fatalf("invitations: %+v", list)
 	}
+	// a link works once: the guest who used it may reopen it, a second guest may not
+	if res, _ := lee.do("POST", "/api/join", `{"code":"`+inv.Code+`"}`); res.StatusCode != 200 {
+		t.Fatalf("same guest reopening: %d", res.StatusCode)
+	}
+	choi := newClient(t, ts.URL)
+	if res, out := choi.do("POST", "/api/join", `{"code":"`+inv.Code+`"}`); res.StatusCode != 403 || out["error"] != "invite_invalid" {
+		t.Fatalf("second guest on a used link: %d %v", res.StatusCode, out)
+	}
 
 	// revoked codes stop working; admin can still admit by hand
 	guests.RevokeInvitation(inv.ID)
 	park := newClient(t, ts.URL)
 	noRedirect(park)
-	if res, _ := park.do("GET", "/join?invitationCode="+inv.Code, ""); res.Header.Get("Location") != invalidURL {
+	if res, _ := park.do("POST", "/api/join", `{"code":"`+inv.Code+`"}`); res.StatusCode != 403 {
 		t.Fatal("revoked code should be invalid")
 	}
 	_, me := park.do("GET", "/api/me", "") // 403, but the guest is now known
 	_ = me
 	gl, _ := guests.List()
-	var parkID string
+	var pending []string
 	for _, g := range gl {
 		if !g.Admitted {
-			parkID = g.ID
+			pending = append(pending, g.ID)
 		}
 	}
-	if parkID == "" {
-		t.Fatalf("park should be listed as not admitted: %+v", gl)
+	if len(pending) != 2 { // park and choi
+		t.Fatalf("park and choi should be listed as not admitted: %+v", gl)
 	}
-	guests.Admit(parkID)
+	for _, id := range pending {
+		guests.Admit(id)
+	}
 	if res, _ := park.do("GET", "/api/me", ""); res.StatusCode != 200 {
 		t.Fatalf("admitted by admin: %d", res.StatusCode)
 	}

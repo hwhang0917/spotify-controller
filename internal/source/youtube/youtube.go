@@ -331,7 +331,7 @@ func (s *Source) Test(ctx context.Context, region string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("chart (key %s): %w", hint, err)
 	}
-	return fmt.Sprintf("key %s: search ok (%d), chart ok (%d)", hint, len(tracks), len(chart)), nil
+	return fmt.Sprintf("search ok (%d), chart ok (%d)", len(tracks), len(chart)), nil
 }
 
 // keyHint identifies the stored key without revealing it, so the admin can

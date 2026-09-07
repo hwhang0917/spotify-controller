@@ -57,6 +57,7 @@ const (
 	errNotInQueue   = "not_in_queue"
 	errNotOwner     = "not_owner"
 	errInviteNeeded = "invite_required"
+	errInviteBad    = "invite_invalid"
 	errSearchFailed = "search_failed"
 	errNoSource     = "no_source"
 	errTrackNeeded  = "track_required"
@@ -65,9 +66,8 @@ const (
 
 // joinPath is where an invitation link lands: /join?invitationCode=XXXX-XXXX.
 const (
-	joinPath   = "/join"
-	joinParam  = "invitationCode"
-	invalidURL = "/?invite=invalid"
+	joinPath  = "/join"
+	joinParam = "invitationCode"
 )
 
 // NewHandler wires the API and serves dist (a built Vite app) as an SPA:
@@ -81,12 +81,11 @@ func NewHandler(dist fs.FS, p *player.Player, guests *Guests, top TopFunc, onErr
 	// requests go through the app's logger (file + stderr), not chi's colored stdout one
 	r.Use(middleware.RequestLogger(&middleware.DefaultLogFormatter{Logger: log.Default(), NoColor: true}), middleware.Recoverer, noRobots, noStore)
 
-	r.Get(joinPath, s.join)
-
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 		})
+		r.Post("/join", s.join) // before the guest gate: the caller is not admitted yet
 		r.Group(func(r chi.Router) {
 			r.Use(s.guest)
 			r.Get("/state", s.state)
@@ -154,18 +153,25 @@ func (s *Server) guest(next http.Handler) http.Handler {
 	})
 }
 
-// join redeems an invitation link and sends the guest to the page.
+// join redeems an invitation code for the caller. The link itself
+// (joinPath?joinParam=CODE) is served as the SPA, which then POSTs here: chat
+// apps fetch every URL they see for a preview, and a GET that redeemed would
+// let the previewer spend the single use before the person does.
 func (s *Server) join(w http.ResponseWriter, r *http.Request) {
 	id := guestID(w, r)
 	if gu, err := s.guests.db.Seen(id, time.Now()); err != nil || gu.Blocked {
 		writeError(w, http.StatusForbidden, errBlocked)
 		return
 	}
-	if err := s.guests.Redeem(r.URL.Query().Get(joinParam), id); err != nil {
-		http.Redirect(w, r, invalidURL, http.StatusFound)
+	var in struct {
+		Code string `json:"code"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&in)
+	if err := s.guests.Redeem(in.Code, id); err != nil {
+		writeError(w, http.StatusForbidden, errInviteBad)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusFound)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func guestFrom(r *http.Request) player.Guest {

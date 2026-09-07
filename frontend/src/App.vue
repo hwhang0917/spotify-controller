@@ -151,8 +151,8 @@ const removeGuest = (id: string) => run('remove', async () => { await api.Remove
 const redirectUri = computed(() => `http://127.0.0.1:${cfg.value?.spotify.callbackPort ?? 27272}/callback`)
 const youtubeKey = ref('')
 const testYouTubeKey = () => run('yt-test', async () => {
-  const out = await api.YouTubeTest(locale.value === 'ko' ? 'KR' : 'US')
-  return t('toast.youtubeTestOk', { out })
+  await api.YouTubeTest(locale.value === 'ko' ? 'KR' : 'US')
+  return t('toast.youtubeTestOk')
 })
 const saveYouTubeKey = () => run('yt-key', async () => {
   await api.SetYouTubeAPIKey(youtubeKey.value)
@@ -472,7 +472,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                 </div>
                 <p v-if="!invitations.length" class="text-sm text-muted-foreground">{{ t('invite.empty') }}</p>
                 <ul v-else class="divide-y rounded-md border">
-                  <li v-for="inv in invitations" :key="inv.id" class="flex items-center gap-3 px-3 py-2 text-sm" :class="inv.revoked || isExpired(inv) ? 'opacity-60' : ''">
+                  <li v-for="inv in invitations" :key="inv.id" class="flex items-center gap-3 px-3 py-2 text-sm" :class="inv.revoked || inv.uses > 0 || isExpired(inv) ? 'opacity-60' : ''">
                     <div class="min-w-0 flex-1">
                       <p class="font-mono">
                         <template v-if="inv.code">{{ inv.code }}</template>
@@ -480,13 +480,13 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                       </p>
                       <p class="text-xs text-muted-foreground">
                         <template v-if="inv.revoked">{{ t('invite.revoked') }}</template>
+                        <template v-else-if="inv.uses > 0">{{ t('invite.used') }}</template>
                         <template v-else-if="isExpired(inv)">{{ t('invite.expired') }}</template>
                         <template v-else>{{ t('invite.expires', { when: fmtWhen(inv.expiresAt) }) }}</template>
-                        · {{ t('invite.uses', { n: inv.uses }) }}
                       </p>
                     </div>
-                    <Button v-if="inv.code && !inv.revoked && !isExpired(inv)" variant="outline" size="sm" :disabled="!!busy" @click="copyLink(inv.code)"><Copy />{{ t('invite.copy') }}</Button>
-                    <Button v-if="!inv.revoked && !isExpired(inv)" variant="ghost" size="sm" class="text-destructive" :disabled="!!busy" @click="revokeInvitation(inv.id)">{{ t('invite.revoke') }}</Button>
+                    <Button v-if="inv.code && !inv.revoked && !inv.uses && !isExpired(inv)" variant="outline" size="sm" :disabled="!!busy" @click="copyLink(inv.code)"><Copy />{{ t('invite.copy') }}</Button>
+                    <Button v-if="!inv.revoked && !inv.uses && !isExpired(inv)" variant="ghost" size="sm" class="text-destructive" :disabled="!!busy" @click="revokeInvitation(inv.id)">{{ t('invite.revoke') }}</Button>
                   </li>
                 </ul>
               </CardContent>

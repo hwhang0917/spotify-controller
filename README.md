@@ -42,8 +42,8 @@ host process.
 - **Guests are a cookie plus a display name.** Enough for one vote per person
   and "requested by Kim". The admin can disconnect, remove, or block anyone.
 - **Invitation-only mode.** Flip the switch and newcomers need a link like
-  `http://<host>:5555/join?invitationCode=K7PM-3QXD`. Codes have a TTL and can
-  be revoked. Everyone already in the room stays in when you turn it on.
+  `http://<host>:5555/join?invitationCode=K7PM-3QXD`. Each link works
+  once (the person who used it can reopen it), has a TTL, and can be revoked. Everyone already in the room stays in when you turn it on.
 - **Everything survives a relaunch.** Settings, guests, blocks, invitations and
   the queue live in a SQLite file (pure Go driver, no CGO).
 

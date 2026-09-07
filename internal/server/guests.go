@@ -115,7 +115,7 @@ func (g *Guests) Redeem(code, id string) error {
 	if _, err := g.db.Seen(id, time.Now()); err != nil {
 		return err
 	}
-	if err := g.db.RedeemInvitation(strings.TrimSpace(code), time.Now()); err != nil {
+	if err := g.db.RedeemInvitation(strings.TrimSpace(code), id, time.Now()); err != nil {
 		return err
 	}
 	return g.Admit(id)

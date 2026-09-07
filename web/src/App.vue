@@ -86,7 +86,7 @@ function waitForAccess() {
     } catch { /* still waiting */ }
   }, ACCESS_MS)
 }
-const inviteInvalid = new URLSearchParams(location.search).get('invite') === 'invalid'
+const inviteInvalid = ref(false)
 // Health check: the stream dropping could be a kick or a reconnect blip, so
 // the page only goes "offline" once /api/health itself fails. It then probes
 // until the server answers again.
@@ -202,6 +202,13 @@ function startStream() {
 }
 
 onMounted(async () => {
+  // The invitation is redeemed from here, not by the link's GET: chat apps
+  // fetch links for previews and would spend the single use before the person.
+  const code = new URLSearchParams(location.search).get('invitationCode')
+  if (code) {
+    try { await api('POST', '/api/join', { code }) } catch { inviteInvalid.value = true }
+    history.replaceState(null, '', '/')
+  }
   await act(async () => {
     const me = await api<{ name: string }>('GET', '/api/me')
     name.value = me.name

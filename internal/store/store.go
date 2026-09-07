@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -42,7 +43,8 @@ CREATE TABLE IF NOT EXISTS invitations (
 	created_at TEXT NOT NULL,
 	expires_at TEXT NOT NULL,
 	revoked    INTEGER NOT NULL DEFAULT 0,
-	uses       INTEGER NOT NULL DEFAULT 0
+	uses       INTEGER NOT NULL DEFAULT 0,
+	used_by    TEXT NOT NULL DEFAULT ''     -- guest id that redeemed it; a link works once
 );
 CREATE TABLE IF NOT EXISTS plays (
 	source      TEXT NOT NULL,
@@ -79,6 +81,11 @@ func Open(path string) (*Store, error) {
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("store: schema: %w", err)
+	}
+	// migration for databases created before invitations became single-use
+	if _, err := db.Exec(`ALTER TABLE invitations ADD COLUMN used_by TEXT NOT NULL DEFAULT ''`); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		db.Close()
+		return nil, fmt.Errorf("store: migrate: %w", err)
 	}
 	_ = os.Chmod(path, 0o600)
 	return &Store{db: db}, nil
@@ -247,13 +254,16 @@ func (s *Store) RevokeInvitation(id int64) error {
 	return err
 }
 
-// ErrInvalidInvitation covers unknown, expired, and revoked codes alike.
+// ErrInvalidInvitation covers unknown, expired, revoked, and used codes alike.
 var ErrInvalidInvitation = errors.New("invalid invitation")
 
-// RedeemInvitation validates the code at `now` and counts a use.
-func (s *Store) RedeemInvitation(code string, now time.Time) error {
-	res, err := s.db.Exec(`UPDATE invitations SET uses = uses + 1
-		WHERE code_hash = ? AND revoked = 0 AND expires_at > ?`, Hash(code), now.UTC().Format(time.RFC3339Nano))
+// RedeemInvitation validates the code at `now` and marks it used by guestID.
+// A link works once; the guest who used it may open it again (idempotent),
+// anyone else is refused.
+func (s *Store) RedeemInvitation(code, guestID string, now time.Time) error {
+	res, err := s.db.Exec(`UPDATE invitations SET uses = 1, used_by = ?
+		WHERE code_hash = ? AND revoked = 0 AND expires_at > ? AND (used_by = '' OR used_by = ?)`,
+		guestID, Hash(code), now.UTC().Format(time.RFC3339Nano), guestID)
 	if err != nil {
 		return err
 	}

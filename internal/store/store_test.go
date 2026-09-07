@@ -78,13 +78,20 @@ func TestInvitations(t *testing.T) {
 	if err != nil || in.Label != "EFGH" || in.ID == 0 {
 		t.Fatalf("create: %+v %v", in, err)
 	}
-	if err := s.RedeemInvitation("wrong", now); err != ErrInvalidInvitation {
+	if err := s.RedeemInvitation("wrong", "g1", now); err != ErrInvalidInvitation {
 		t.Fatalf("wrong code: %v", err)
 	}
-	if err := s.RedeemInvitation("ABCD-EFGH", now); err != nil {
+	if err := s.RedeemInvitation("ABCD-EFGH", "g1", now); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.RedeemInvitation("ABCD-EFGH", now.Add(2*time.Hour)); err != ErrInvalidInvitation {
+	// single use: the same guest may reopen the link, anyone else is refused
+	if err := s.RedeemInvitation("ABCD-EFGH", "g1", now); err != nil {
+		t.Fatalf("same guest again: %v", err)
+	}
+	if err := s.RedeemInvitation("ABCD-EFGH", "g2", now); err != ErrInvalidInvitation {
+		t.Fatalf("second guest: %v", err)
+	}
+	if err := s.RedeemInvitation("ABCD-EFGH", "g1", now.Add(2*time.Hour)); err != ErrInvalidInvitation {
 		t.Fatalf("expired: %v", err)
 	}
 	list, _ := s.Invitations()
@@ -92,7 +99,7 @@ func TestInvitations(t *testing.T) {
 		t.Fatalf("list: %+v", list)
 	}
 	s.RevokeInvitation(in.ID)
-	if err := s.RedeemInvitation("ABCD-EFGH", now); err != ErrInvalidInvitation {
+	if err := s.RedeemInvitation("ABCD-EFGH", "g1", now); err != ErrInvalidInvitation {
 		t.Fatalf("revoked: %v", err)
 	}
 	// the code itself is never stored
