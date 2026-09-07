@@ -21,9 +21,10 @@ curl -fsSL https://raw.githubusercontent.com/hwhang0917/vibe-music/master/script
 
 Installs to `~/.local/bin/vibe-music` (Linux) or `~/Applications/vibe-music.app`
 (macOS); set `INSTALL_DIR` to change that, `VIBE_MUSIC_VERSION` to pin a
-release. On Linux the app needs WebKitGTK 4.1 at runtime
-(`libwebkit2gtk-4.1-0` on Debian/Ubuntu). Apple Silicon and ARM Linux are not
-built yet.
+release. On Linux the app needs WebKitGTK 4.1 at runtime; the script checks
+for it and prints the package to install (`libwebkit2gtk-4.1-0` on
+Debian/Ubuntu, `webkit2gtk4.1` on Fedora, `webkit2gtk-4.1` on Arch). Apple
+Silicon and ARM Linux are not built yet.
 
 Building it yourself, or hacking on it: see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 

@@ -40,6 +40,17 @@ case "$asset" in
   *.tar.gz)
     tar xzf "$tmp/$asset" -C "$dir"
     chmod +x "$dir/vibe-music"
+    # The binary links WebKitGTK 4.1 dynamically; say so now rather than at launch.
+    missing=$(ldd "$dir/vibe-music" | awk '/not found/ {print $1}')
+    if [ -n "$missing" ]; then
+      echo "vibe-music: installed $dir/vibe-music, but these shared libraries are missing:" >&2
+      echo "$missing" | sed 's/^/  /' >&2
+      echo "Install WebKitGTK 4.1 and rerun vibe-music:" >&2
+      echo "  Debian/Ubuntu: sudo apt install libwebkit2gtk-4.1-0" >&2
+      echo "  Fedora:        sudo dnf install webkit2gtk4.1" >&2
+      echo "  Arch:          sudo pacman -S webkit2gtk-4.1" >&2
+      exit 1
+    fi
     echo "Installed $dir/vibe-music"
     case ":$PATH:" in *":$dir:"*) ;; *) echo "note: $dir is not on your PATH" ;; esac ;;
   *.zip)
