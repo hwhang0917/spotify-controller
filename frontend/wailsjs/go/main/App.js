@@ -22,3 +22,4 @@ export function KickGuest(arg1) { return app()['KickGuest'](arg1); }
 export function RemoveGuest(arg1) { return app()['RemoveGuest'](arg1); }
 export function BlockGuest(arg1, arg2) { return app()['BlockGuest'](arg1, arg2); }
 export function RemoveQueueItem(arg1) { return app()['RemoveQueueItem'](arg1); }
+export function PickFolder() { return app()['PickFolder'](); }

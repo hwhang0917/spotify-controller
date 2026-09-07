@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Ban, ChevronUp, FolderOpen, Pause, Play, Power, RefreshCw, SkipForward, Trash2, Unplug, Users, Volume2, X } from '@lucide/vue'
+import { Ban, ChevronUp, FolderOpen, FolderPlus, Minus, Pause, Play, Power, RefreshCw, SkipForward, Trash2, Unplug, Users, Volume2, X } from '@lucide/vue'
 import * as api from '../wailsjs/go/main/App'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 import { Badge } from '@/components/ui/badge'
@@ -14,9 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Artwork from './Artwork.vue'
+import SpotifyIcon from './SpotifyIcon.vue'
 import { locale, setLocale, t } from './i18n'
 import type { Config, Device, GuestInfo, ServerStatus, SourceStatus, State } from './types'
 import { fmtDuration, NS_PER_SEC } from './types'
@@ -32,7 +32,7 @@ const server = ref<ServerStatus>({ running: false, port: 0, url: '' })
 const state = ref<State | null>(null)
 const guests = ref<GuestInfo[]>([])
 const devices = ref<Device[]>([])
-const foldersText = ref('')
+const folders = ref<string[]>([])
 const volume = ref([100])
 const skipRatio = ref([50])
 const busy = ref('')
@@ -66,13 +66,23 @@ async function refresh() {
 
 function saveConfig() {
   if (!cfg.value) return
-  const c = {
-    ...cfg.value,
-    skipRatio: skipRatio.value[0] / 100,
-    local: { folders: foldersText.value.split('\n').map((l) => l.trim()).filter(Boolean) },
-  }
+  const c = { ...cfg.value, skipRatio: skipRatio.value[0] / 100, local: { folders: folders.value } }
   return run('save', () => api.SaveConfig(c))
 }
+
+// Native directory chooser; saving also rescans so the change is audible right away.
+const addFolder = () => run('pick', async () => {
+  const dir = await api.PickFolder()
+  if (!dir || folders.value.includes(dir)) return
+  folders.value = [...folders.value, dir]
+  await saveConfig()
+  notice.value = t('local.indexed', { n: await api.LocalRescan() })
+})
+const removeFolder = (dir: string) => run('remove-folder', async () => {
+  folders.value = folders.value.filter((f) => f !== dir)
+  await saveConfig()
+  notice.value = t('local.indexed', { n: await api.LocalRescan() })
+})
 
 const toggleServer = () => run('server', () => (server.value.running ? api.StopServer() : api.StartServer(server.value.port)))
 const useSource = (id: string) => run(id, () => api.SetActiveSource(id))
@@ -259,7 +269,9 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                 @click="useSource(s.id)"
               >
                 <div class="flex items-center justify-between">
-                  <span class="font-medium">{{ s.name }}</span>
+                  <span class="flex items-center gap-2 font-medium">
+                    <SpotifyIcon v-if="s.id === 'spotify'" /><FolderOpen v-else class="size-4 text-muted-foreground" />{{ s.name }}
+                  </span>
                   <Badge :variant="s.active ? 'default' : s.ready ? 'secondary' : 'outline'">
                     {{ s.active ? t('source.active') : s.ready ? t('source.ready') : t('source.setup') }}
                   </Badge>
@@ -274,17 +286,24 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                 <CardDescription>{{ t('local.desc') }}</CardDescription>
               </CardHeader>
               <CardContent class="space-y-3">
-                <Textarea v-model="foldersText" rows="3" class="font-mono text-xs" placeholder="C:\Users\me\Music" />
+                <ul v-if="folders.length" class="divide-y rounded-md border">
+                  <li v-for="dir in folders" :key="dir" class="flex items-center gap-2 px-3 py-1.5">
+                    <FolderOpen class="size-4 shrink-0 text-muted-foreground" />
+                    <span class="min-w-0 flex-1 truncate font-mono text-xs" :title="dir">{{ dir }}</span>
+                    <Button variant="ghost" size="icon-xs" :disabled="!!busy" :aria-label="t('local.remove')" @click="removeFolder(dir)"><Minus /></Button>
+                  </li>
+                </ul>
+                <p v-else class="text-sm text-muted-foreground">{{ t('local.empty') }}</p>
                 <div class="flex gap-2">
-                  <Button :disabled="!!busy" @click="saveConfig">{{ t('local.save') }}</Button>
-                  <Button variant="outline" :disabled="!!busy" @click="rescan"><RefreshCw />{{ t('local.rescan') }}</Button>
+                  <Button :disabled="!!busy" @click="addFolder"><FolderPlus />{{ t('local.add') }}</Button>
+                  <Button variant="outline" :disabled="!folders.length || !!busy" @click="rescan"><RefreshCw />{{ t('local.rescan') }}</Button>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>{{ t('spotify.title') }}</CardTitle>
+                <CardTitle class="flex items-center gap-2"><SpotifyIcon />{{ t('spotify.title') }}</CardTitle>
                 <CardDescription>{{ t('spotify.desc') }}</CardDescription>
               </CardHeader>
               <CardContent class="space-y-4">

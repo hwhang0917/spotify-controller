@@ -199,6 +199,11 @@ func (a *App) SetActiveSource(id string) error {
 
 func (a *App) LocalRescan() (int, error) { return a.local.Rescan() }
 
+// PickFolder opens the OS directory chooser. Returns "" when cancelled.
+func (a *App) PickFolder() (string, error) {
+	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "Add music folder"})
+}
+
 // SpotifyConnect runs the browser consent flow; blocks until finished.
 func (a *App) SpotifyConnect() error { return a.spotify.Connect(a.ctx) }
 
