@@ -9,8 +9,9 @@ Screens: a small admin window on the host, and a phone-friendly guest page.
 
 ## Get it
 
-Download `vibe-music.exe` from the latest build (Releases, or the artifact on
-any green CI run) and run it. No installer, nothing else to install.
+Download `vibe-music.exe` from the
+[Releases](https://github.com/hwhang0917/vibe-music/releases) page and run it.
+No installer, nothing else to install.
 
 Building it yourself, or hacking on it: see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
@@ -110,6 +111,12 @@ Settings, guests, blocks, invitations and the playlist survive a relaunch.
   has a website restriction. A new or edited key can take a few minutes.
 - **The exe shows the wrong icon**: Windows caches icons; rename the file once
   or sign out and in.
+
+## Contributing
+
+Bug reports and ideas go through the
+[issue templates](https://github.com/hwhang0917/vibe-music/issues/new/choose);
+code changes are described in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

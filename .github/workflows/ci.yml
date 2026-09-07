@@ -54,8 +54,11 @@ jobs:
       - name: Build Windows binary
         run: $(go env GOPATH)/bin/wails build -platform windows/amd64 -s -skipbindings
 
+      # A build check, not a release: the exe is kept only long enough to
+      # grab for a manual test of that commit.
       - uses: actions/upload-artifact@v7
         with:
           name: vibe-music-windows-amd64
           path: build/bin/vibe-music.exe
           if-no-files-found: error
+          retention-days: 3
