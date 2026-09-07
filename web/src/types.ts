@@ -15,6 +15,7 @@ export interface QueueItem {
   requestedBy: string
   requestedAt: string
   votes: number
+  mine?: boolean
 }
 
 export interface State {

@@ -233,6 +233,11 @@ func (a *App) BlockGuest(id string, blocked bool) error {
 	return config.Save(cfg)
 }
 
+// --- queue (admin override) ---
+
+// RemoveQueueItem drops any queued item regardless of who requested it.
+func (a *App) RemoveQueueItem(id string) error { return a.player.Remove(id, "", true) }
+
 // --- playback (admin override) ---
 
 func (a *App) GetState() player.State  { return a.player.State() }

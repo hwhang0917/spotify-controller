@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { ChevronUp, Plus, Search, Users } from '@lucide/vue'
+import { ChevronUp, Plus, Search, Users, X } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -74,6 +74,7 @@ const request = (tr: Track) => act(async () => {
   results.value = []
 })
 const vote = (id: string) => act(() => api('POST', `/api/queue/${id}/vote`))
+const remove = (id: string) => act(() => api('DELETE', `/api/queue/${id}`))
 const voteSkip = () => act(() => api('POST', '/api/skip'))
 
 const isSpotify = computed(() => state.value?.source?.id === 'spotify')
@@ -186,6 +187,9 @@ onUnmounted(() => es?.close())
               <TrackRow v-for="(it, i) in state.queue" :key="it.id" :track="it.track" :index="i + 1" :subtitle="it.requestedBy">
                 <Button variant="outline" size="sm" class="font-mono tabular-nums" @click="vote(it.id)">
                   <ChevronUp />{{ it.votes }}
+                </Button>
+                <Button v-if="it.mine" variant="ghost" size="icon-sm" :aria-label="t('queue.remove')" :title="t('queue.remove')" @click="remove(it.id)">
+                  <X />
                 </Button>
               </TrackRow>
             </div>

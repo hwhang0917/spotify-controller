@@ -35,7 +35,9 @@ type QueueItem struct {
 	RequestedByName string       `json:"requestedBy"`
 	RequestedAt     time.Time    `json:"requestedAt"`
 	Votes           int          `json:"votes"`
-	votes           map[string]struct{}
+	// Mine is set per recipient by the server (the requester's cookie ID must not leak).
+	Mine  bool `json:"mine,omitempty"`
+	votes map[string]struct{}
 }
 
 type NowPlaying struct {
@@ -238,7 +240,32 @@ func (p *Player) Vote(itemID, guestID string) error {
 			return nil
 		}
 	}
-	return errors.New("not in queue")
+	return ErrNotInQueue
+}
+
+// ErrNotOwner is returned when a guest tries to remove someone else's request.
+var ErrNotOwner = errors.New("not your request")
+
+// ErrNotInQueue is returned for unknown queue items.
+var ErrNotInQueue = errors.New("not in queue")
+
+// Remove drops a queued item. Guests may only remove their own requests;
+// admin passes admin=true to remove anything.
+func (p *Player) Remove(itemID, guestID string, admin bool) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for i, it := range p.queue {
+		if it.ID != itemID {
+			continue
+		}
+		if !admin && it.RequestedBy != guestID {
+			return ErrNotOwner
+		}
+		p.queue = append(p.queue[:i], p.queue[i+1:]...)
+		p.broadcastIfChanged()
+		return nil
+	}
+	return ErrNotInQueue
 }
 
 // VoteSkip records a skip vote and advances when the threshold is met.

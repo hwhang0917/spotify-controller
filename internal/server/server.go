@@ -43,6 +43,7 @@ const (
 	errNameInvalid  = "name_invalid"
 	errBlocked      = "blocked"
 	errNotInQueue   = "not_in_queue"
+	errNotOwner     = "not_owner"
 	errTrackNeeded  = "track_required"
 	errNoPlayer     = "player_not_running"
 )
@@ -75,6 +76,7 @@ func NewHandler(dist fs.FS, p *player.Player, guests *Guests) http.Handler {
 				r.Use(s.requireName)
 				r.Post("/queue", s.request)
 				r.Post("/queue/{id}/vote", s.vote)
+				r.Delete("/queue/{id}", s.remove)
 				r.Post("/skip", s.skip)
 			})
 		})
@@ -131,7 +133,23 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, errNoPlayer)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.player.State())
+	writeJSON(w, http.StatusOK, s.stateFor(guestFrom(r)))
+}
+
+// stateFor marks which queue items belong to this guest. The queue slice is
+// copied so subscribers never share a mutated snapshot.
+func (s *Server) stateFor(g player.Guest) player.State {
+	return markMine(s.player.State(), g.ID)
+}
+
+func markMine(st player.State, guestID string) player.State {
+	q := make([]player.QueueItem, len(st.Queue))
+	for i, it := range st.Queue {
+		it.Mine = it.RequestedBy == guestID
+		q[i] = it
+	}
+	st.Queue = q
+	return st
 }
 
 // events streams player state as SSE `state` events, with a comment ping for keepalive.
@@ -171,7 +189,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, ": ping\n\n")
 			flusher.Flush()
 		case st := <-ch:
-			data, _ := json.Marshal(st)
+			data, _ := json.Marshal(markMine(st, g.ID))
 			fmt.Fprintf(w, "event: state\ndata: %s\n\n", data)
 			flusher.Flush()
 		}
@@ -228,7 +246,7 @@ func (s *Server) request(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, s.player.State())
+	writeJSON(w, http.StatusOK, s.stateFor(guestFrom(r)))
 }
 
 func (s *Server) vote(w http.ResponseWriter, r *http.Request) {
@@ -236,7 +254,18 @@ func (s *Server) vote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, errNotInQueue)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.player.State())
+	writeJSON(w, http.StatusOK, s.stateFor(guestFrom(r)))
+}
+
+func (s *Server) remove(w http.ResponseWriter, r *http.Request) {
+	switch err := s.player.Remove(chi.URLParam(r, "id"), guestFrom(r).ID, false); {
+	case errors.Is(err, player.ErrNotOwner):
+		writeError(w, http.StatusForbidden, errNotOwner)
+	case err != nil:
+		writeError(w, http.StatusNotFound, errNotInQueue)
+	default:
+		writeJSON(w, http.StatusOK, s.stateFor(guestFrom(r)))
+	}
 }
 
 func (s *Server) skip(w http.ResponseWriter, r *http.Request) {

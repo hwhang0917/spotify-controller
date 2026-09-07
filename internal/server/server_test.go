@@ -124,8 +124,31 @@ func TestGuestFlow(t *testing.T) {
 		t.Fatalf("now playing: %v", np)
 	}
 
-	// vote on the queued item
+	// "mine" is per recipient: Lee sees their request as theirs, Kim does not
+	if queue[0].(map[string]any)["mine"] != true {
+		t.Fatalf("lee should see mine=true: %v", queue[0])
+	}
+	_, kimView := kim.do("GET", "/api/state", "")
+	if kimView["queue"].([]any)[0].(map[string]any)["mine"] == true {
+		t.Fatal("kim should not see lee's request as mine")
+	}
+
+	// removal: only the owner or the admin
 	itemID := queue[0].(map[string]any)["id"].(string)
+	if res, out := kim.do("DELETE", "/api/queue/"+itemID, ""); res.StatusCode != 403 || out["error"] != "not_owner" {
+		t.Fatalf("kim removing lee's request: %d %v", res.StatusCode, out)
+	}
+	if res, _ := lee.do("DELETE", "/api/queue/nope", ""); res.StatusCode != 404 {
+		t.Fatalf("remove unknown: %d", res.StatusCode)
+	}
+	if res, st := lee.do("DELETE", "/api/queue/"+itemID, ""); res.StatusCode != 200 || len(st["queue"].([]any)) != 0 {
+		t.Fatalf("lee removing own: %d %v", res.StatusCode, st["queue"])
+	}
+	_, st = lee.do("POST", "/api/queue", `{"id":"b","title":"Beta"}`)
+	queue = st["queue"].([]any)
+	itemID = queue[0].(map[string]any)["id"].(string)
+
+	// vote on the queued item
 	res, st = kim.do("POST", "/api/queue/"+itemID+"/vote", "")
 	if res.StatusCode != 200 || st["queue"].([]any)[0].(map[string]any)["votes"].(float64) != 2 {
 		t.Fatalf("vote: %d %v", res.StatusCode, st["queue"])

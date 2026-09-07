@@ -20,3 +20,4 @@ export function Guests(): Promise<any[]>;
 export function KickGuest(arg1: string): Promise<void>;
 export function RemoveGuest(arg1: string): Promise<void>;
 export function BlockGuest(arg1: string, arg2: boolean): Promise<void>;
+export function RemoveQueueItem(arg1: string): Promise<void>;

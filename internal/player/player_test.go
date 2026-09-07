@@ -226,3 +226,28 @@ func TestRemoveGuestDropsRequestsAndVotes(t *testing.T) {
 		t.Fatalf("votes=%d skip=%d", s.Queue[0].Votes, s.SkipVotes)
 	}
 }
+
+func TestRemoveOwnOrAdmin(t *testing.T) {
+	p, _ := setup(t)
+	ctx := context.Background()
+	_ = p.Request(ctx, a, g1) // playing
+	_ = p.Request(ctx, b, g1)
+	_ = p.Request(ctx, c, g2)
+	bID, cID := p.State().Queue[0].ID, p.State().Queue[1].ID
+
+	if err := p.Remove(bID, g2.ID, false); err != ErrNotOwner {
+		t.Fatalf("g2 removing g1's request: %v", err)
+	}
+	if err := p.Remove(bID, g1.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Remove(cID, g1.ID, true); err != nil {
+		t.Fatal("admin should remove anything:", err)
+	}
+	if err := p.Remove(cID, g1.ID, true); err != ErrNotInQueue {
+		t.Fatalf("gone already: %v", err)
+	}
+	if len(p.State().Queue) != 0 {
+		t.Fatal("queue should be empty")
+	}
+}

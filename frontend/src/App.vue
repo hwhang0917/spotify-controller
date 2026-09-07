@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Ban, ChevronUp, FolderOpen, Pause, Play, Power, RefreshCw, SkipForward, Trash2, Unplug, Users, Volume2 } from '@lucide/vue'
+import { Ban, ChevronUp, FolderOpen, Pause, Play, Power, RefreshCw, SkipForward, Trash2, Unplug, Users, Volume2, X } from '@lucide/vue'
 import * as api from '../wailsjs/go/main/App'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 import { Badge } from '@/components/ui/badge'
@@ -199,6 +199,12 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                       <p class="truncate text-xs text-muted-foreground">{{ it.track.artist || '—' }} · {{ it.requestedBy }}</p>
                     </div>
                     <Badge variant="outline" class="font-mono tabular-nums"><ChevronUp />{{ it.votes }}</Badge>
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <Button variant="ghost" size="icon-sm" :disabled="!!busy" @click="run('remove-item', () => api.RemoveQueueItem(it.id))"><X /></Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{{ t('queue.remove') }}</TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
               </ScrollArea>
