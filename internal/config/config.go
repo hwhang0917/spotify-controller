@@ -5,7 +5,6 @@ package config
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -152,20 +151,14 @@ func Save(kv KV, c Config) error {
 	return kv.Set(settingsKey, data)
 }
 
-// LoadToken returns nil, nil when no token is stored.
-// ponytail: plaintext file, 0600, same protection as the database itself.
-// Encrypting it with a key stored beside it would add nothing; the OS
-// keychain is the upgrade path if this ever runs on a shared machine.
+// LoadToken returns nil, nil when no token is stored. Sealed at rest; see secret.go.
 func LoadToken() (*oauth2.Token, error) {
 	dir, err := Dir()
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(filepath.Join(dir, tokenFile))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
+	data, err := loadSecret(filepath.Join(dir, tokenFile))
+	if err != nil || data == nil {
 		return nil, err
 	}
 	var tok oauth2.Token
@@ -175,7 +168,7 @@ func LoadToken() (*oauth2.Token, error) {
 	return &tok, nil
 }
 
-// SaveToken writes atomically with 0600; nil removes the file.
+// SaveToken seals and writes atomically with 0600; nil removes the file.
 func SaveToken(tok *oauth2.Token) error {
 	dir, err := Dir()
 	if err != nil {
@@ -183,49 +176,30 @@ func SaveToken(tok *oauth2.Token) error {
 	}
 	p := filepath.Join(dir, tokenFile)
 	if tok == nil {
-		err := os.Remove(p)
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
+		return saveSecret(p, nil)
 	}
 	data, err := json.Marshal(tok)
 	if err != nil {
 		return err
 	}
-	tmp := p + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, p)
+	return saveSecret(p, data)
 }
 
-// LoadYouTubeKey returns "" when none is stored.
+// LoadYouTubeKey returns "" when none is stored. Sealed at rest; see secret.go.
 func LoadYouTubeKey() (string, error) {
 	dir, err := Dir()
 	if err != nil {
 		return "", err
 	}
-	data, err := os.ReadFile(filepath.Join(dir, youtubeKeyFile))
-	if errors.Is(err, os.ErrNotExist) {
-		return "", nil
-	}
+	data, err := loadSecret(filepath.Join(dir, youtubeKeyFile))
 	return strings.TrimSpace(string(data)), err
 }
 
-// SaveYouTubeKey writes the key 0600; an empty key removes the file.
+// SaveYouTubeKey seals and writes the key 0600; an empty key removes the file.
 func SaveYouTubeKey(key string) error {
 	dir, err := Dir()
 	if err != nil {
 		return err
 	}
-	p := filepath.Join(dir, youtubeKeyFile)
-	if strings.TrimSpace(key) == "" {
-		err := os.Remove(p)
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
-	return os.WriteFile(p, []byte(strings.TrimSpace(key)), 0o600)
+	return saveSecret(filepath.Join(dir, youtubeKeyFile), []byte(strings.TrimSpace(key)))
 }

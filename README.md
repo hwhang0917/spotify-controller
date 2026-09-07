@@ -109,7 +109,7 @@ Data lives in `$XDG_CONFIG_HOME/vibe-music/` (Linux),
 (Windows). Override the directory with `VIBE_MUSIC_DIR`. It holds
 `vibe-music.db` (settings, guests, invitations, queue), `vibe-music.log`
 (JSON lines from the app and every guest request; one previous file is kept
-once it passes 5 MB) and, once connected, `spotify-token.json`, all `0600`.
+once it passes 5 MB) and, once connected, `spotify-token.json` and `youtube-api-key` (sealed, see below), all `0600`.
 The admin window's footer has **Info** (these paths, with copy buttons) and
 **Open source licenses**; the guest page footer has the same licenses link (`ui/attributions.ts`, direct dependencies only:
 update it when adding one).
@@ -121,8 +121,12 @@ update it when adding one).
 - Invitation codes are stored as SHA-256 too. The plaintext is shown in the
   admin window only for codes created since the app was launched.
 - The Spotify token and the YouTube API key must be usable, so they cannot be
-  hashed. Each stays in its own `0600` file outside the database. Encrypting it with a key kept next to it
-  would add nothing; the OS keychain is the upgrade path if the host is shared.
+  hashed. Each is sealed at rest in its own `0600` file outside the database.
+  On Windows the sealing is DPAPI, keyed by the logged-in user's credentials,
+  so a copied file or another account on the PC cannot read it. Elsewhere it is
+  AES-256-GCM with a random key in `secret.key` beside the data, which guards a
+  copied file but not the same account; the OS keychain is the upgrade there.
+  Files written by older builds in plaintext are sealed on first read.
 - bcrypt is not used because there are no passwords: every secret here is a
   high-entropy random token, where a fast hash is the correct choice.
 

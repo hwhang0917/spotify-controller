@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/oauth2"
@@ -115,5 +116,37 @@ func TestEnabledSourcesAndMigration(t *testing.T) {
 	kv = mapKV{settingsKey: []byte(`{"enabled":[]}`)}
 	if m, _ := Load(kv); len(m.Enabled) != 0 {
 		t.Fatalf("explicit empty stays empty: %+v", m)
+	}
+}
+
+// Secrets are sealed on disk; a plaintext file from an older build still loads
+// and is sealed on that first read.
+func TestSecretsSealedAndLegacyMigrates(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(EnvDir, dir)
+	if err := SaveYouTubeKey("AIzaTEST"); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(dir, youtubeKeyFile))
+	if !strings.HasPrefix(string(raw), sealedMagic) || strings.Contains(string(raw), "AIzaTEST") {
+		t.Fatalf("not sealed: %q", raw)
+	}
+	if k, err := LoadYouTubeKey(); err != nil || k != "AIzaTEST" {
+		t.Fatalf("round trip: %q %v", k, err)
+	}
+	// legacy plaintext
+	os.WriteFile(filepath.Join(dir, youtubeKeyFile), []byte("AIzaOLD\n"), 0o600)
+	if k, err := LoadYouTubeKey(); err != nil || k != "AIzaOLD" {
+		t.Fatalf("legacy: %q %v", k, err)
+	}
+	raw, _ = os.ReadFile(filepath.Join(dir, youtubeKeyFile))
+	if !strings.HasPrefix(string(raw), sealedMagic) {
+		t.Fatalf("legacy file not migrated: %q", raw)
+	}
+	if err := SaveYouTubeKey(""); err != nil {
+		t.Fatal(err)
+	}
+	if k, _ := LoadYouTubeKey(); k != "" {
+		t.Fatalf("removed key still loads: %q", k)
 	}
 }
