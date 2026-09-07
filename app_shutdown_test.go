@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -31,7 +32,7 @@ func TestStopServerEndsEventStreams(t *testing.T) {
 	if _, err := a.StartServer(port); err != nil {
 		t.Fatal(err)
 	}
-	res, err := http.Get("http://127.0.0.1:" + itoa(port) + "/api/events")
+	res, err := http.Get("http://127.0.0.1:" + strconv.Itoa(port) + "/api/events")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,6 +56,3 @@ func TestStopServerEndsEventStreams(t *testing.T) {
 	}
 }
 
-func itoa(n int) string {
-	return string(rune('0'+n/10000)) + string(rune('0'+n/1000%10)) + string(rune('0'+n/100%10)) + string(rune('0'+n/10%10)) + string(rune('0'+n%10))
-}
