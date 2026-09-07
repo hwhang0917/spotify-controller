@@ -32,7 +32,7 @@ export interface State {
   skipThreshold: number
   volume: number
   guests: number
-  event?: { type: 'seek' | 'queue_moved' | 'queue_removed' | 'skipped'; title?: string; position?: number }
+  event?: { type: 'seek' | 'queue_moved' | 'queue_removed' | 'skipped' | 'source_disabled'; title?: string; position?: number }
 }
 
 export const NS_PER_MS = 1e6

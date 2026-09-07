@@ -13,6 +13,7 @@ export interface SourceStatus {
   id: string
   name: string
   active: boolean
+  enabled: boolean
   ready: boolean
   detail: string
 }

@@ -416,3 +416,28 @@ func TestPlayFailureKeepsHeadQueued(t *testing.T) {
 		t.Fatal("head should be popped after a successful retry")
 	}
 }
+
+func TestDeactivateClearsEverythingAndAnnounces(t *testing.T) {
+	p, f := setup(t)
+	ctx := context.Background()
+	_ = p.Request(ctx, a, g1)
+	_ = p.Request(ctx, b, g2)
+	ch, cancel := p.Subscribe()
+	defer cancel()
+	<-ch
+	p.Deactivate(ctx)
+	s := <-ch
+	if s.Source != nil || s.NowPlaying != nil || len(s.Queue) != 0 {
+		t.Fatalf("state after deactivate: %+v", s)
+	}
+	if s.Event == nil || s.Event.Type != "source_disabled" || s.Event.Title != "Fake" {
+		t.Fatalf("event: %+v", s.Event)
+	}
+	if f.Calls[len(f.Calls)-1] != "deactivate" {
+		t.Fatalf("source not deactivated: %v", f.Calls)
+	}
+	if err := p.Request(ctx, a, g1); err == nil {
+		t.Fatal("requests must fail with no active source")
+	}
+	p.Deactivate(ctx) // idempotent
+}

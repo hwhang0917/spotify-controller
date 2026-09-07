@@ -32,8 +32,10 @@ type Config struct {
 	ActiveSource string  `json:"activeSource"`
 	SkipRatio    float64 `json:"skipRatio"`
 	InviteOnly   bool    `json:"inviteOnly"`
-	Local        Local   `json:"local"`
-	Spotify      Spotify `json:"spotify"`
+	// Disabled lists source IDs the admin switched off. Absent = enabled.
+	Disabled []string `json:"disabled"`
+	Local    Local    `json:"local"`
+	Spotify  Spotify  `json:"spotify"`
 	// YouTube.HasKey is derived at read time; the key itself is in its own file.
 	YouTube YouTube `json:"youtube"`
 }
@@ -69,6 +71,33 @@ func (c *Config) normalize() {
 	if c.Local.Folders == nil {
 		c.Local.Folders = []string{}
 	}
+	if c.Disabled == nil {
+		c.Disabled = []string{}
+	}
+}
+
+// IsDisabled reports whether the admin switched a source off.
+func (c Config) IsDisabled(id string) bool {
+	for _, d := range c.Disabled {
+		if d == id {
+			return true
+		}
+	}
+	return false
+}
+
+// SetDisabled adds or removes id from the disabled list.
+func (c *Config) SetDisabled(id string, disabled bool) {
+	kept := make([]string, 0, len(c.Disabled)+1)
+	for _, d := range c.Disabled {
+		if d != id {
+			kept = append(kept, d)
+		}
+	}
+	if disabled {
+		kept = append(kept, id)
+	}
+	c.Disabled = kept
 }
 
 // Dir returns the data directory (created on demand).

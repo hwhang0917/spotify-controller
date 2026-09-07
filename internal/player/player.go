@@ -207,6 +207,27 @@ func (p *Player) SetSource(ctx context.Context, id string) error {
 	return nil
 }
 
+// Deactivate stops playback, clears the queue and leaves no source active.
+// Used when the admin switches the active source off. Announces it to guests.
+func (p *Player) Deactivate(ctx context.Context) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.active == nil {
+		return
+	}
+	name := p.active.Name()
+	if err := p.active.Deactivate(ctx); err != nil {
+		log.Println("player: deactivate:", err)
+	}
+	p.active = nil
+	p.queue = nil
+	p.now = source.Playback{}
+	p.requester = ""
+	p.skipVotes = map[string]struct{}{}
+	p.pending = &Event{Type: "source_disabled", Title: name}
+	p.broadcastIfChanged()
+}
+
 func (p *Player) Search(ctx context.Context, q string, limit int) ([]source.Track, error) {
 	src := p.ActiveSource()
 	if src == nil {

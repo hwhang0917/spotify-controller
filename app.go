@@ -52,6 +52,7 @@ const (
 	errYouTubeKey    = "youtube_api_key"
 	errYouTubeQuota  = "youtube_quota"
 	errYouTubePlayer = "youtube_player"
+	errSourceOff     = "source_disabled"
 )
 
 // Winsock reports its own errno values; Go's syscall.EADDRINUSE/EACCES are
@@ -136,11 +137,12 @@ type ServerStatus struct {
 
 // SourceStatus is one row in the admin's source picker.
 type SourceStatus struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Active bool   `json:"active"`
-	Ready  bool   `json:"ready"`
-	Detail string `json:"detail"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Active  bool   `json:"active"`
+	Enabled bool   `json:"enabled"`
+	Ready   bool   `json:"ready"`
+	Detail  string `json:"detail"`
 }
 
 func NewApp() *App { return &App{} }
@@ -213,7 +215,9 @@ func (a *App) startup(ctx context.Context) {
 	go a.player.Run(runCtx)
 	go a.forwardState(runCtx)
 
-	if err := a.player.SetSource(runCtx, cfg.ActiveSource); err != nil {
+	if cfg.IsDisabled(cfg.ActiveSource) {
+		log.Println("activate: source", cfg.ActiveSource, "is disabled")
+	} else if err := a.player.SetSource(runCtx, cfg.ActiveSource); err != nil {
 		log.Println("activate", cfg.ActiveSource+":", err)
 	}
 }
@@ -339,7 +343,7 @@ func (a *App) Sources() []SourceStatus {
 	cfg := a.GetConfig()
 	out := make([]SourceStatus, 0, 2)
 	for _, info := range a.player.Sources() {
-		st := SourceStatus{ID: info.ID, Name: info.Name, Active: active != nil && active.ID() == info.ID}
+		st := SourceStatus{ID: info.ID, Name: info.Name, Active: active != nil && active.ID() == info.ID, Enabled: !cfg.IsDisabled(info.ID)}
 		switch info.ID {
 		case a.local.ID():
 			st.Ready = len(cfg.Local.Folders) > 0
@@ -366,6 +370,9 @@ func (a *App) Sources() []SourceStatus {
 
 // SetActiveSource switches backends and remembers the choice.
 func (a *App) SetActiveSource(id string) error {
+	if a.GetConfig().IsDisabled(id) {
+		return codeErr(errSourceOff, "")
+	}
 	if err := a.player.SetSource(a.ctx, id); err != nil {
 		return uiError(err)
 	}
@@ -373,6 +380,32 @@ func (a *App) SetActiveSource(id string) error {
 	a.cfg.ActiveSource = id
 	a.mu.Unlock()
 	return a.saveConfig()
+}
+
+// SetSourceEnabled switches a source on or off. Disabling the active source
+// stops playback and clears the queue (the UI confirms first).
+func (a *App) SetSourceEnabled(id string, enabled bool) error {
+	if _, ok := a.sourceByID(id); !ok {
+		return codeErr(errUnknownSource, id)
+	}
+	if !enabled {
+		if active := a.player.ActiveSource(); active != nil && active.ID() == id {
+			a.player.Deactivate(a.ctx)
+		}
+	}
+	a.mu.Lock()
+	a.cfg.SetDisabled(id, !enabled)
+	a.mu.Unlock()
+	return a.saveConfig()
+}
+
+func (a *App) sourceByID(id string) (player.SourceInfo, bool) {
+	for _, s := range a.player.Sources() {
+		if s.ID == id {
+			return s, true
+		}
+	}
+	return player.SourceInfo{}, false
 }
 
 func (a *App) LocalRescan() (int, error) { return a.local.Rescan() }

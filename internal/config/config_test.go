@@ -94,3 +94,20 @@ func TestYouTubeKeyFile(t *testing.T) {
 		t.Fatal("removed")
 	}
 }
+
+func TestDisabledSources(t *testing.T) {
+	c := Default()
+	if c.Disabled == nil || c.IsDisabled("spotify") {
+		t.Fatalf("defaults: %+v", c)
+	}
+	c.SetDisabled("spotify", true)
+	c.SetDisabled("spotify", true)
+	c.SetDisabled("youtube", true)
+	if !c.IsDisabled("spotify") || len(c.Disabled) != 2 {
+		t.Fatalf("set: %v", c.Disabled)
+	}
+	c.SetDisabled("spotify", false)
+	if c.IsDisabled("spotify") || !c.IsDisabled("youtube") {
+		t.Fatalf("unset: %v", c.Disabled)
+	}
+}

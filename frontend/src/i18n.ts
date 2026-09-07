@@ -3,6 +3,16 @@ import { detectLocale, format, saveLocale, type Locale, type Messages } from '..
 
 const messages: Messages = {
   en: {
+    'source.use': 'Use',
+    'source.useNow': 'Switch to',
+    'source.disabled': 'off',
+    'source.disableTitle': 'Turn off {name}?',
+    'source.disableBody': 'It is playing right now. Playback stops and every queued song is removed. Guests will be told.',
+    'source.disableConfirm': 'Turn off and clear queue',
+    'source.cancel': 'Cancel',
+    'toast.sourceEnabled': '{name} turned on',
+    'toast.sourceDisabled': '{name} turned off',
+    'err.source_disabled': 'That source is turned off. Enable it first.',
     'local.help': 'Folders to index. MP3, WAV, FLAC and OGG are supported. Adding or removing a folder rescans right away.',
     'spotify.help': 'Remote-controls the Spotify desktop app on this PC with your own Client ID (developer.spotify.com → Dashboard → your app).\nRegister this redirect URI there: http://127.0.0.1/callback\nNeeds Spotify Premium and the desktop app open on this PC.',
     'youtube.help': 'Search uses your own YouTube Data API key (Google Cloud console → YouTube Data API v3 → Credentials).\nPlayback runs in the official YouTube player, which replaces the artwork and must stay visible while YouTube is active.\nAbout 100 searches a day on the default quota.',
@@ -139,6 +149,16 @@ const messages: Messages = {
     'guests.blockHint': 'Blocks their browser and drops their requests and votes.',
   },
   ko: {
+    'source.use': '사용',
+    'source.useNow': '전환',
+    'source.disabled': '꺼짐',
+    'source.disableTitle': '{name}을(를) 끌까요?',
+    'source.disableBody': '지금 재생 중이에요. 재생이 멈추고 대기열의 모든 곡이 삭제돼요. 게스트에게도 알려요.',
+    'source.disableConfirm': '끄고 대기열 비우기',
+    'source.cancel': '취소',
+    'toast.sourceEnabled': '{name}을(를) 켰어요',
+    'toast.sourceDisabled': '{name}을(를) 껐어요',
+    'err.source_disabled': '꺼져 있는 소스예요. 먼저 켜 주세요.',
     'local.help': '색인할 폴더. MP3, WAV, FLAC, OGG를 지원해요. 폴더를 추가하거나 제거하면 바로 다시 검색해요.',
     'spotify.help': '본인 Client ID(developer.spotify.com → Dashboard → 내 앱)로 이 PC의 Spotify 데스크톱 앱을 원격 제어해요.\n거기에 이 Redirect URI를 등록해 주세요: http://127.0.0.1/callback\nSpotify Premium과 이 PC에서 실행 중인 데스크톱 앱이 필요해요.',
     'youtube.help': '검색은 본인 YouTube Data API 키를 써요 (Google Cloud 콘솔 → YouTube Data API v3 → 사용자 인증 정보).\n재생은 공식 YouTube 플레이어에서 하고, YouTube가 활성 소스인 동안 앨범 아트 자리에 보여야 해요.\n기본 할당량으로 하루 약 100회 검색할 수 있어요.',

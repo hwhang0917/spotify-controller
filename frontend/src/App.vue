@@ -12,6 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -137,6 +138,24 @@ const saveYouTubeKey = () => run('yt-key', async () => {
   return t(had ? 'toast.youtubeKeySaved' : 'toast.youtubeKeyCleared')
 })
 const isYouTube = computed(() => state.value?.source?.id === 'youtube')
+
+// Enable/disable a source. Switching off the one that is playing or has a
+// queue asks first, because it stops playback and clears the queue.
+const pendingDisable = ref<SourceStatus | null>(null)
+const applyEnabled = (s: SourceStatus, on: boolean) => run('source-enabled', async () => {
+  await api.SetSourceEnabled(s.id, on)
+  return t(on ? 'toast.sourceEnabled' : 'toast.sourceDisabled', { name: s.name })
+})
+function toggleEnabled(s: SourceStatus, on: boolean) {
+  const inUse = s.active && (state.value?.nowPlaying || (state.value?.queue.length ?? 0) > 0)
+  if (!on && inUse) pendingDisable.value = s
+  else applyEnabled(s, on)
+}
+function confirmDisable() {
+  const s = pendingDisable.value
+  pendingDisable.value = null
+  if (s) applyEnabled(s, false)
+}
 const setInviteOnly = (on: boolean) => run('invite-only', async () => { await api.SetInviteOnly(on); return t(on ? 'toast.inviteOn' : 'toast.inviteOff') })
 const admit = (id: string) => run('admit', async () => { await api.AdmitGuest(id); return t('toast.guestAdmitted') })
 const createInvitation = () => run('invite', async () => {
@@ -401,25 +420,44 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
 
           <!-- Sources -->
           <TabsContent value="sources" class="space-y-4">
-            <div class="grid gap-3 sm:grid-cols-2">
-              <button
+            <div class="grid gap-3 sm:grid-cols-3">
+              <div
                 v-for="s in sources" :key="s.id"
-                :disabled="s.active || !s.ready || !!busy"
-                class="rounded-lg border bg-card p-4 text-left transition-colors hover:bg-muted disabled:cursor-default disabled:hover:bg-card"
-                :class="s.active ? 'border-primary' : ''"
-                @click="useSource(s.id)"
+                class="rounded-lg border bg-card p-4 transition-colors"
+                :class="[s.active ? 'border-primary' : '', s.enabled ? '' : 'opacity-60']"
               >
-                <div class="flex items-center justify-between">
-                  <span class="flex items-center gap-2 font-medium">
-                    <SpotifyIcon v-if="s.id === 'spotify'" /><YouTubeIcon v-else-if="s.id === 'youtube'" /><FolderOpen v-else class="size-4 text-muted-foreground" />{{ s.name }}
+                <div class="flex items-center justify-between gap-2">
+                  <span class="flex min-w-0 items-center gap-2 font-medium">
+                    <SpotifyIcon v-if="s.id === 'spotify'" /><YouTubeIcon v-else-if="s.id === 'youtube'" /><FolderOpen v-else class="size-4 text-muted-foreground" />
+                    <span class="truncate">{{ s.name }}</span>
                   </span>
-                  <Badge :variant="s.active ? 'default' : s.ready ? 'secondary' : 'outline'">
-                    {{ s.active ? t('source.active') : s.ready ? t('source.ready') : t('source.setup') }}
-                  </Badge>
+                  <label class="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    {{ t('source.use') }}
+                    <Switch size="sm" :model-value="s.enabled" :disabled="!!busy" @update:model-value="(on: boolean) => toggleEnabled(s, on)" />
+                  </label>
                 </div>
-                <p class="mt-1 text-sm text-muted-foreground">{{ s.detail }}</p>
-              </button>
+                <div class="mt-3 flex items-center justify-between gap-2">
+                  <Badge :variant="s.active ? 'default' : s.enabled && s.ready ? 'secondary' : 'outline'">
+                    {{ !s.enabled ? t('source.disabled') : s.active ? t('source.active') : s.ready ? t('source.ready') : t('source.setup') }}
+                  </Badge>
+                  <Button v-if="!s.active" size="sm" variant="outline" :disabled="!s.enabled || !s.ready || !!busy" @click="useSource(s.id)">{{ t('source.useNow') }}</Button>
+                </div>
+                <p class="mt-2 truncate text-xs text-muted-foreground">{{ s.detail }}</p>
+              </div>
             </div>
+
+            <AlertDialog :open="!!pendingDisable" @update:open="(o: boolean) => { if (!o) pendingDisable = null }">
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{{ t('source.disableTitle', { name: pendingDisable?.name ?? '' }) }}</AlertDialogTitle>
+                  <AlertDialogDescription>{{ t('source.disableBody') }}</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>{{ t('source.cancel') }}</AlertDialogCancel>
+                  <AlertDialogAction @click="confirmDisable">{{ t('source.disableConfirm') }}</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             <Card>
               <CardHeader>
