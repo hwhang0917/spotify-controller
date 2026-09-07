@@ -206,3 +206,24 @@ func TestValidateAPIKey(t *testing.T) {
 		}
 	}
 }
+
+func TestChartFollowsNextPage(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.URL.Query().Get("pageToken") == "" {
+			w.Write([]byte(`{"nextPageToken":"p2","items":[{"id":"a","snippet":{"title":"A"}},{"id":"b","snippet":{"title":"B"}}]}`))
+			return
+		}
+		if r.URL.Query().Get("maxResults") != "1" {
+			t.Errorf("second page should ask for the remainder, got %s", r.URL.Query().Get("maxResults"))
+		}
+		w.Write([]byte(`{"items":[{"id":"c","snippet":{"title":"C"}},{"id":"d","snippet":{"title":"D"}}]}`))
+	}))
+	defer srv.Close()
+	s := New(Options{APIKey: "k", APIURL: srv.URL})
+	got, err := s.Chart(context.Background(), "KR", 3)
+	if err != nil || calls != 2 || len(got) != 3 || got[2].ID != "c" {
+		t.Fatalf("calls=%d got=%+v err=%v", calls, got, err)
+	}
+}

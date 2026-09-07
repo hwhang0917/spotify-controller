@@ -176,7 +176,8 @@ type searchResponse struct {
 }
 
 type videosResponse struct {
-	Items []struct {
+	NextPageToken string `json:"nextPageToken"`
+	Items         []struct {
 		ID      string `json:"id"`
 		Snippet struct {
 			Title        string `json:"title"`
@@ -358,12 +359,30 @@ func (s *Source) Chart(ctx context.Context, region string, limit int) ([]source.
 	if ok && time.Since(c.at) < chartTTL && len(c.tracks) >= limit {
 		return c.tracks[:limit], nil
 	}
-	var vr videosResponse
+	// The category-filtered chart often comes back short of maxResults (about
+	// 30 for music) with a nextPageToken, so keep paging until limit or the end.
+	var tracks []source.Track
 	fetch := func(region string) error {
-		return s.get(ctx, "/videos", url.Values{
-			"part": {"snippet,contentDetails"}, "chart": {"mostPopular"},
-			"videoCategoryId": {musicCategory}, "regionCode": {region}, "maxResults": {strconv.Itoa(limit)},
-		}, &vr)
+		tracks = tracks[:0]
+		page := ""
+		for len(tracks) < limit {
+			var vr videosResponse
+			q := url.Values{
+				"part": {"snippet,contentDetails"}, "chart": {"mostPopular"},
+				"videoCategoryId": {musicCategory}, "regionCode": {region}, "maxResults": {strconv.Itoa(limit - len(tracks))},
+			}
+			if page != "" {
+				q.Set("pageToken", page)
+			}
+			if err := s.get(ctx, "/videos", q, &vr); err != nil {
+				return err
+			}
+			tracks = append(tracks, s.remember(vr)...)
+			if page = vr.NextPageToken; page == "" || len(vr.Items) == 0 {
+				break
+			}
+		}
+		return nil
 	}
 	err := fetch(region)
 	if errors.Is(err, ErrChartUnavailable) && region != defaultRegion {
@@ -372,7 +391,9 @@ func (s *Source) Chart(ctx context.Context, region string, limit int) ([]source.
 	if err != nil {
 		return nil, err
 	}
-	tracks := s.remember(vr)
+	if len(tracks) > limit {
+		tracks = tracks[:limit]
+	}
 	s.mu.Lock()
 	s.charts[region] = chartEntry{tracks: tracks, at: time.Now()}
 	s.mu.Unlock()

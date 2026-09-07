@@ -323,7 +323,7 @@ onUnmounted(() => { es?.close(); window.clearInterval(health); window.clearInter
           <template v-else-if="canSearch">
             <div class="mb-2 flex items-center gap-1.5">
               <Button size="xs" :variant="browse === 'top' ? 'secondary' : 'ghost'" @click="browse = 'top'">{{ t('search.top') }}</Button>
-              <Button v-if="hasChart" size="xs" :variant="browse === 'chart' ? 'secondary' : 'ghost'" @click="browse = 'chart'">{{ t('search.chart', { region }) }}</Button>
+              <Button v-if="hasChart" size="xs" :variant="browse === 'chart' ? 'secondary' : 'ghost'" @click="browse = 'chart'">{{ t('search.chart', { n: chart.length || 50, region }) }}</Button>
             </div>
             <template v-if="browse === 'chart' && hasChart">
               <div v-if="chartLoading" class="space-y-3">
