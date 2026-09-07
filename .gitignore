@@ -1,0 +1,7 @@
+build/bin
+node_modules
+frontend/dist/*
+!frontend/dist/.gitkeep
+web/dist/*
+!web/dist/.gitkeep
+.env
