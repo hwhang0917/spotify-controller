@@ -1,52 +1,81 @@
 # vibe-music
 
 Office jukebox with votes. One host PC plays the music; everyone on the same
-network opens a web page to see what's playing and vote on what comes next.
-Music sources are plugins. Spotify is one of them, and the host's Spotify
-credentials never leave the host process.
-
-> **Status:** v2 rewrite, scaffold only. Nothing plays yet.
+network opens a web page to see what's playing, request songs, upvote the
+queue, and vote to skip. Music sources are plugins: **Local files** and
+**Spotify** today, more later. The host's Spotify credentials never leave the
+host process.
 
 ## How it works
 
 ```
-                 ┌──────────────────────────┐
- guests ─votes──▶│  vibe-music (Go binary)  │
- (browser)       │  admin window   : Wails  │
-                 │  guest API + UI : Chi    │
-                 │  sources        : plugins│
-                 └───────────┬──────────────┘
-                             ▼
-                      host PC speaker
+                 ┌──────────────────────────────┐
+ guests ─votes──▶│  vibe-music (one Go binary)  │
+ (browser)       │  admin window   : Wails      │
+                 │  guest API + UI : Chi + SSE  │
+                 │  core           : queue,     │
+                 │                   votes, poll│
+                 │  sources        : local │ spotify
+                 └──────────┬──────────┬────────┘
+                            ▼          ▼
+                      speaker      Spotify desktop
+                    (beep/oto)     client (Web API)
 ```
 
-- **Admin window** (Wails): configure plugins, users and roles, start/stop the
-  guest server, show the join URL.
-- **Guest server** (Chi): JSON API under `/api`, embedded Vue guest UI for
-  everything else. Guests never talk to Spotify or hold any token; the server
-  performs searches and queue changes on their behalf.
-- **Sources** are mutually exclusive: one active plugin per session, never a
-  mixed queue. This keeps the Spotify plugin a pure remote control for the
-  Spotify desktop client, which is what Spotify's developer policy allows.
-
-## Layout
-
-```
-main.go, app.go        Wails app; owns the guest http.Server lifecycle
-internal/server/       Chi router: /api/* and SPA fallback
-web/                   guest UI (Vue + Vite + Tailwind), embedded via web/embed.go
-frontend/              admin UI (Vue + Vite + Tailwind), embedded by Wails
-build/                 Wails packaging assets
-```
+- **Core owns the queue.** Sorted by votes, then request time. Requesting a
+  song already queued counts as an upvote. Skip happens when a configurable
+  share of connected guests votes (default 50%). The admin can always skip.
+- **Sources are mutually exclusive.** One active at a time; switching stops
+  playback and clears the queue. Required by Spotify's policy against mixing
+  its content with other audio, and it keeps the code simple.
+- **Spotify is a remote control.** Playback happens in the Spotify desktop
+  client on the host. vibe-music only sends Web API player commands, so it is a
+  non-streaming app. Guests never hold a token; the server searches and queues
+  on their behalf.
+- **Guests are a cookie plus a display name.** Enough for one vote per person
+  and "requested by Kim". Roles and invites come later.
 
 ## Requirements
 
-- Go 1.25+
-- Node.js 20+
+- Go 1.25+, Node.js 20+
 - [Wails v2 CLI](https://wails.io/docs/gettingstarted/installation):
   `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
-- Platform deps per `wails doctor`. Windows builds are CGO-free; Linux and
-  macOS need the WebView toolchain Wails lists.
+- **Windows / macOS:** no C toolchain needed (`CGO_ENABLED=0` builds work).
+- **Linux:** Wails needs WebKitGTK and the local player needs ALSA headers
+  (`libasound2-dev`), both via cgo. See `wails doctor`.
+- For Spotify: a Premium account on the host, the Spotify desktop app open on
+  the host PC, and your own app registered at the
+  [Spotify dashboard](https://developer.spotify.com/dashboard).
+
+## Setup
+
+### Local files
+
+In the admin window, paste one or more folders (one per line), Save, Rescan.
+MP3, WAV, FLAC and OGG Vorbis are indexed; tags and embedded artwork are read
+where the format has them. Output goes to the OS default audio device.
+
+### Spotify
+
+1. Create an app at the Spotify dashboard. Redirect URI: `http://127.0.0.1/callback`
+   (loopback IP, no port; `localhost` is rejected by Spotify).
+2. Paste the Client ID into the admin window and press **Connect**. A browser
+   opens for consent; the token is stored in your user config directory with
+   `0600` permissions and refreshed automatically.
+3. Open the Spotify desktop app on the host and press play once so it shows up
+   as a device. Pick it under **Devices** or leave "whatever is active".
+
+Your dashboard app stays in development mode; only the host authenticates, so
+the 5-user limit is never an issue.
+
+## Run
+
+Start the guest server from the admin window and share the URL it shows.
+Guests type a name, then search, request, upvote, and vote to skip.
+
+Config lives at `$XDG_CONFIG_HOME/vibe-music/config.json` (Linux),
+`~/Library/Application Support/vibe-music/` (macOS), or `%AppData%\vibe-music\`
+(Windows). Override with `VIBE_MUSIC_CONFIG=/path/to/config.json`.
 
 ## Develop
 
@@ -56,30 +85,47 @@ cd web && npm run dev     # guest UI on :5173, proxies /api to the guest server
 go test ./...
 ```
 
-Start the guest server from the admin window, then open the URL it shows on
-any device in the same network.
-
 ## Build
 
 ```sh
-wails build               # builds both UIs, embeds them, outputs build/bin/
+wails build               # both UIs, embedded, output in build/bin/
 ```
 
-`wails.json` chains the guest UI build into `frontend:build`, so a single
+`wails.json` chains the guest UI build into `frontend:build`, so one
 `wails build` produces the whole binary.
 
-## Spotify plugin notes
+## Layout
 
-- Each host registers their own app at the
-  [Spotify dashboard](https://developer.spotify.com/dashboard) and pastes the
-  Client ID into the admin window. Use the PKCE flow; no client secret.
-- Redirect URI must be a loopback IP such as `http://127.0.0.1:PORT/callback`.
-  `localhost` is rejected.
-- Playback happens in the Spotify desktop client on the host. This app only
-  sends Web API player commands.
-- Any Spotify metadata shown to guests carries the Spotify logo and a
-  "Listen on Spotify" link, per Spotify's design guidelines.
-- Spotify is for personal, non-commercial use. Where you play it is on you.
+```
+main.go, app.go            Wails app: bindings, config, guest server lifecycle
+internal/source/           Source interface (Track, Playback, ArtworkProvider)
+internal/source/local/     folder scan, tags, search, beep playback
+internal/source/spotify/   PKCE connect, Web API remote control, end detection
+internal/source/fake/      in-memory source for tests
+internal/player/           queue, votes, skip threshold, poll loop, state fan-out
+internal/config/           config.json in the user config dir
+internal/server/           Chi: guest cookie + name, /api/*, SSE, SPA fallback
+ui/theme.css               DESIGN.md tokens as a Tailwind v4 theme
+frontend/                  admin UI (Vue + Vite + Tailwind), embedded by Wails
+web/                       guest UI (Vue + Vite + Tailwind), embedded via web/embed.go
+```
+
+### Adding a source
+
+Implement `source.Source` in `internal/source/<name>/`, add it to the
+`Sources` list in `app.go`, and give it a card in the admin UI. Nothing else
+changes. Implement `source.ArtworkProvider` if artwork is not a public URL.
+
+## Spotify policy notes
+
+- Every Spotify track shown to guests carries the Spotify mark and a
+  "Listen on Spotify" link, per Spotify's design guidelines. Check the icon in
+  `web/src/SpotifyMark.vue` against the official brand kit before shipping.
+- Spotify is licensed for personal, non-commercial use. Where you play it is
+  on you.
+- Track end is detected by polling once a second, so there is a short gap
+  between songs. Repeat mode is switched off on activation because
+  repeat-track would defeat end detection.
 
 ## License
 
