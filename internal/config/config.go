@@ -29,7 +29,7 @@ type Config struct {
 	Local        Local   `json:"local"`
 	Spotify      Spotify `json:"spotify"`
 	// Blocked guest IDs (cookie IDs). Managed from the admin window.
-	Blocked []string `json:"blocked,omitempty"`
+	Blocked []string `json:"blocked"`
 }
 
 type Local struct {
@@ -45,7 +45,20 @@ type Spotify struct {
 }
 
 func Default() Config {
-	return Config{Port: DefaultPort, ActiveSource: "local", SkipRatio: DefaultSkipRatio}
+	c := Config{Port: DefaultPort, ActiveSource: "local", SkipRatio: DefaultSkipRatio}
+	c.normalize()
+	return c
+}
+
+// normalize keeps slices non-nil so they serialize as [] rather than null,
+// which the UIs would otherwise have to guard against everywhere.
+func (c *Config) normalize() {
+	if c.Local.Folders == nil {
+		c.Local.Folders = []string{}
+	}
+	if c.Blocked == nil {
+		c.Blocked = []string{}
+	}
 }
 
 // Path returns the config file location.
@@ -78,6 +91,7 @@ func Load() (Config, error) {
 	if err := json.Unmarshal(data, &c); err != nil {
 		return Config{}, fmt.Errorf("parse %s: %w", p, err)
 	}
+	c.normalize()
 	return c, nil
 }
 

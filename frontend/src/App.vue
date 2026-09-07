@@ -60,7 +60,7 @@ async function refresh() {
   server.value = { ...st, port: server.value.port || st.port }
   state.value = ps
   guests.value = g
-  foldersText.value = c.local.folders.join('\n')
+  foldersText.value = (c.local.folders ?? []).join('\n')
   skipRatio.value = [Math.round(c.skipRatio * 100)]
 }
 

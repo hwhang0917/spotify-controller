@@ -17,6 +17,17 @@ func TestLoadCreatesDefaultThenRoundTrips(t *testing.T) {
 	if c.Port != DefaultPort || c.ActiveSource != "local" {
 		t.Fatalf("defaults: %+v", c)
 	}
+	// slices must be [] not null: the admin UI calls .join on folders
+	if c.Local.Folders == nil || c.Blocked == nil {
+		t.Fatalf("nil slices: %+v", c)
+	}
+	if err := os.WriteFile(p, []byte(`{"local":{"folders":null}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if c2, _ := Load(); c2.Local.Folders == nil || c2.Blocked == nil {
+		t.Fatalf("null in file should normalize to []: %+v", c2)
+	}
+	Save(c)
 	if fi, err := os.Stat(p); err != nil || fi.Mode().Perm() != 0o600 {
 		t.Fatalf("stat: %v %v", fi, err)
 	}

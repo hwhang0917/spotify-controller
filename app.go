@@ -143,6 +143,9 @@ func (a *App) GetConfig() config.Config {
 // SaveConfig persists and applies settings. Changing the Spotify Client ID
 // requires SpotifyConnect afterwards; the token is kept as-is here.
 func (a *App) SaveConfig(c config.Config) error {
+	if c.Local.Folders == nil {
+		c.Local.Folders = []string{}
+	}
 	a.mu.Lock()
 	c.Spotify.Token = a.cfg.Spotify.Token
 	a.cfg = c
