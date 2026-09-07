@@ -46,6 +46,8 @@ var (
 	// that a server-side caller cannot satisfy.
 	ErrKeyRestricted = &source.CodedError{Kind: "youtube_key_restricted", Msg: "youtube: API key rejected because of its application restriction"}
 	ErrKeyInvalid    = &source.CodedError{Kind: "youtube_key_invalid", Msg: "youtube: API key invalid or the Data API is not enabled"}
+	// ErrKeyFormat: what was pasted is not shaped like a Google API key at all.
+	ErrKeyFormat = &source.CodedError{Kind: "youtube_key_format", Msg: "youtube: that is not a Google API key"}
 	// ErrChartUnavailable: YouTube has no most-popular chart for that region/category.
 	ErrChartUnavailable = &source.CodedError{Kind: "youtube_chart_unavailable", Msg: "youtube: no chart for this region"}
 )
@@ -112,6 +114,19 @@ func (s *Source) SetAPIKey(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.opts.APIKey = strings.TrimSpace(key)
+}
+
+// Google API keys are "AIza" plus 35 URL-safe characters. Anything else
+// (a pasted error message, a URL) is rejected before it is stored.
+var keyPattern = regexp.MustCompile(`^AIza[0-9A-Za-z_-]{35}$`)
+
+// ValidateAPIKey reports whether key is shaped like a Google API key; the
+// empty key is valid (it removes the stored one).
+func ValidateAPIKey(key string) error {
+	if key = strings.TrimSpace(key); key != "" && !keyPattern.MatchString(key) {
+		return fmt.Errorf("%w: %d chars", ErrKeyFormat, len([]rune(key)))
+	}
+	return nil
 }
 
 func (s *Source) HasAPIKey() bool {
@@ -323,11 +338,11 @@ func (s *Source) Test(ctx context.Context, region string) (string, error) {
 func (s *Source) keyHint() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	k := s.opts.APIKey
+	k := []rune(s.opts.APIKey)
 	if len(k) < 8 {
 		return fmt.Sprintf("%d chars", len(k))
 	}
-	return fmt.Sprintf("%s…%s, %d chars", k[:6], k[len(k)-2:], len(k))
+	return fmt.Sprintf("%s…%s, %d chars", string(k[:6]), string(k[len(k)-2:]), len(k))
 }
 
 // Chart returns the most popular music videos in a region (videos.list with

@@ -192,3 +192,17 @@ func TestUnknownAPIErrorKeepsMessage(t *testing.T) {
 		t.Fatalf("unknown error should carry reason and message: %v", err)
 	}
 }
+
+func TestValidateAPIKey(t *testing.T) {
+	good := "AIza" + strings.Repeat("a", 35)
+	for _, k := range []string{"", "  ", good, " " + good + " "} {
+		if err := ValidateAPIKey(k); err != nil {
+			t.Errorf("%q: %v", k, err)
+		}
+	}
+	for _, k := range []string{"AIza", good + "x", "호스트의 YouTube API 키가 동작하지 않아요"} {
+		if !errors.Is(ValidateAPIKey(k), ErrKeyFormat) {
+			t.Errorf("%q accepted", k)
+		}
+	}
+}

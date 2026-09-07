@@ -555,6 +555,9 @@ func (a *App) Seek(ms int) error {
 
 // SetYouTubeAPIKey stores the Data API key (empty removes it).
 func (a *App) SetYouTubeAPIKey(key string) error {
+	if err := youtube.ValidateAPIKey(key); err != nil {
+		return uiError(err)
+	}
 	if err := config.SaveYouTubeKey(key); err != nil {
 		return err
 	}
