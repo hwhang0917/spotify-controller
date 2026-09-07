@@ -55,4 +55,3 @@ func TestStopServerEndsEventStreams(t *testing.T) {
 		t.Fatal("event stream still open after StopServer")
 	}
 }
-
