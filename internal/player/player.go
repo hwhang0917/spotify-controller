@@ -71,6 +71,7 @@ type SourceInfo struct {
 	Name      string `json:"name"`
 	Enabled   bool   `json:"enabled"`
 	Exclusive bool   `json:"exclusive"` // when enabled, no other source may be
+	HasChart  bool   `json:"hasChart"`  // implements source.Charter
 }
 
 // ExclusiveSources cannot share a queue with other sources (Spotify's policy
@@ -213,7 +214,8 @@ func (p *Player) Sources() []SourceInfo {
 func (p *Player) sourcesLocked() []SourceInfo {
 	out := make([]SourceInfo, 0, len(p.order))
 	for _, id := range p.order {
-		out = append(out, SourceInfo{ID: id, Name: p.sources[id].Name(), Enabled: p.enabled[id], Exclusive: ExclusiveSources[id]})
+		_, hasChart := p.sources[id].(source.Charter)
+		out = append(out, SourceInfo{ID: id, Name: p.sources[id].Name(), Enabled: p.enabled[id], Exclusive: ExclusiveSources[id], HasChart: hasChart})
 	}
 	return out
 }
@@ -325,6 +327,22 @@ func (p *Player) Search(ctx context.Context, sourceID, q string, limit int) ([]s
 		return nil, ErrNoSource
 	}
 	return src.Search(ctx, q, limit)
+}
+
+// Chart lists a source's popularity chart, or nothing if it has none.
+func (p *Player) Chart(ctx context.Context, sourceID, region string, limit int) ([]source.Track, error) {
+	p.mu.Lock()
+	src, ok := p.sources[sourceID]
+	enabled := p.enabled[sourceID]
+	p.mu.Unlock()
+	if !ok || !enabled {
+		return nil, ErrNoSource
+	}
+	ch, ok := src.(source.Charter)
+	if !ok {
+		return []source.Track{}, nil
+	}
+	return ch.Chart(ctx, region, limit)
 }
 
 // Request queues a track. The same song may be queued more than once; each

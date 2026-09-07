@@ -13,7 +13,7 @@ import LocaleToggle from './LocaleToggle.vue'
 import SourceIcon from './SourceIcon.vue'
 import { toast } from 'vue-sonner'
 import { Toaster } from '@/components/ui/sonner'
-import { t, tError } from './i18n'
+import { locale, t, tError } from './i18n'
 import { fmtDuration } from './types'
 import type { State, Track } from './types'
 
@@ -46,6 +46,21 @@ async function loadTop() {
   if (!selected.value) { top.value = []; return }
   try { top.value = await api<Track[]>('GET', `/api/top?source=${encodeURIComponent(selected.value)}`) } catch { /* keep the old list */ }
 }
+
+// Browse mode when the search box is empty: what's popular here, or the source's chart.
+const browse = ref<'top' | 'chart'>('top')
+const chart = ref<Track[]>([])
+const chartLoading = ref(false)
+const hasChart = computed(() => enabledSources.value.find((s) => s.id === selected.value)?.hasChart ?? false)
+const region = computed(() => (locale.value === 'ko' ? 'KR' : (navigator.language.split('-')[1] ?? 'US').toUpperCase()))
+async function loadChart() {
+  if (!selected.value || !hasChart.value) { chart.value = []; return }
+  chartLoading.value = true
+  try { chart.value = await api<Track[]>('GET', `/api/chart?source=${encodeURIComponent(selected.value)}&region=${region.value}`) }
+  catch (e) { toast.error(tError((e as Error).message)) }
+  finally { chartLoading.value = false }
+}
+watch([browse, selected, hasChart], () => { if (browse.value === 'chart') loadChart() })
 const error = ref('')
 const connected = ref(false)
 const blocked = ref(false)
@@ -305,15 +320,37 @@ onUnmounted(() => { es?.close(); window.clearInterval(health); window.clearInter
             </div>
           </div>
           <p v-else-if="query" class="text-sm text-muted-foreground">{{ t('search.empty') }}</p>
-          <template v-else-if="top.length">
-            <p class="eyebrow mb-1">{{ t('search.top') }}</p>
-            <div class="max-h-96 overflow-y-auto">
-              <div class="divide-y">
-                <TrackRow v-for="(tr, i) in top" :key="tr.id" :track="tr" :index="i + 1" :subtitle="tr.album">
-                  <Button size="sm" @click="request(tr)"><Plus />{{ t('search.request') }}</Button>
-                </TrackRow>
-              </div>
+          <template v-else-if="canSearch">
+            <div class="mb-2 flex items-center gap-1.5">
+              <Button size="xs" :variant="browse === 'top' ? 'secondary' : 'ghost'" @click="browse = 'top'">{{ t('search.top') }}</Button>
+              <Button v-if="hasChart" size="xs" :variant="browse === 'chart' ? 'secondary' : 'ghost'" @click="browse = 'chart'">{{ t('search.chart', { region }) }}</Button>
             </div>
+            <template v-if="browse === 'chart' && hasChart">
+              <div v-if="chartLoading" class="space-y-3">
+                <div v-for="i in 4" :key="i" class="flex items-center gap-3">
+                  <Skeleton class="size-11 rounded-md" />
+                  <div class="flex-1 space-y-2"><Skeleton class="h-3 w-2/3" /><Skeleton class="h-3 w-1/3" /></div>
+                </div>
+              </div>
+              <div v-else-if="chart.length" class="max-h-96 overflow-y-auto">
+                <div class="divide-y">
+                  <TrackRow v-for="(tr, i) in chart" :key="tr.id" :track="tr" :index="i + 1" :subtitle="tr.album">
+                    <Button size="sm" @click="request(tr)"><Plus />{{ t('search.request') }}</Button>
+                  </TrackRow>
+                </div>
+              </div>
+              <p v-else class="text-sm text-muted-foreground">{{ t('search.chartEmpty') }}</p>
+            </template>
+            <template v-else>
+              <div v-if="top.length" class="max-h-96 overflow-y-auto">
+                <div class="divide-y">
+                  <TrackRow v-for="(tr, i) in top" :key="tr.id" :track="tr" :index="i + 1" :subtitle="tr.album">
+                    <Button size="sm" @click="request(tr)"><Plus />{{ t('search.request') }}</Button>
+                  </TrackRow>
+                </div>
+              </div>
+              <p v-else class="text-sm text-muted-foreground">{{ t('search.hint') }}</p>
+            </template>
           </template>
           <p v-else class="text-sm text-muted-foreground">{{ t('search.hint') }}</p>
         </CardContent>

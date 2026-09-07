@@ -76,7 +76,7 @@ const pct = computed(() => {
         <Artwork class="aspect-square w-full sm:w-56 rounded-none" />
         <div class="flex flex-1 flex-col justify-center gap-2 px-6 py-5 sm:px-8">
           <p class="eyebrow">{{ t('now.eyebrow') }}</p>
-          <p class="text-lg font-medium text-muted-foreground">{{ t('now.empty') }}</p>
+          <p class="whitespace-pre-line break-keep text-lg font-medium leading-snug text-muted-foreground">{{ t('now.empty') }}</p>
         </div>
       </div>
     </CardContent>

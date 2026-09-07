@@ -28,7 +28,9 @@ const (
 	musicCategory  = "10"
 	watchURL       = "https://www.youtube.com/watch?v="
 	httpTimeout    = 10 * time.Second
-	reportStale    = 5 * time.Second // no report for this long after Play: assume still loading
+	reportStale    = 5 * time.Second  // no report for this long after Play: assume still loading
+	chartTTL       = 30 * time.Minute // charts move slowly; one unit per region per half hour
+	defaultRegion  = "US"
 	statePlaying   = 1
 	stateEnded     = 0
 	stateBuffering = 3
@@ -80,10 +82,17 @@ type Source struct {
 	at      time.Time
 	played  time.Time
 	volume  int
+
+	charts map[string]chartEntry // region -> cached chart
+}
+
+type chartEntry struct {
+	tracks []source.Track
+	at     time.Time
 }
 
 func New(opts Options) *Source {
-	s := &Source{opts: opts, tracks: map[string]source.Track{}, http: opts.HTTP, api: opts.APIURL, volume: 100}
+	s := &Source{opts: opts, tracks: map[string]source.Track{}, charts: map[string]chartEntry{}, http: opts.HTTP, api: opts.APIURL, volume: 100}
 	if s.http == nil {
 		s.http = &http.Client{Timeout: httpTimeout}
 	}
@@ -240,6 +249,23 @@ func (s *Source) Search(ctx context.Context, query string, limit int) ([]source.
 		return nil, err
 	}
 	byID := map[string]source.Track{}
+	for _, t := range s.remember(vr) {
+		byID[t.ID] = t
+	}
+	out := make([]source.Track, 0, len(ids))
+	for _, id := range ids { // keep search ranking
+		if t, ok := byID[id]; ok {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
+// remember maps a videos.list response to tracks and caches them for Status.
+func (s *Source) remember(vr videosResponse) []source.Track {
+	out := make([]source.Track, 0, len(vr.Items))
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, v := range vr.Items {
 		t := source.Track{
 			Source:      "youtube",
@@ -255,18 +281,38 @@ func (s *Source) Search(ctx context.Context, query string, limit int) ([]source.
 				break
 			}
 		}
-		byID[v.ID] = t
+		s.tracks[v.ID] = t
+		out = append(out, t)
 	}
-	out := make([]source.Track, 0, len(ids))
+	return out
+}
+
+// Chart returns the most popular music videos in a region (videos.list with
+// chart=mostPopular, 1 quota unit), cached per region for chartTTL.
+func (s *Source) Chart(ctx context.Context, region string, limit int) ([]source.Track, error) {
+	region = strings.ToUpper(strings.TrimSpace(region))
+	if region == "" {
+		region = defaultRegion
+	}
 	s.mu.Lock()
-	for _, id := range ids { // keep search ranking
-		if t, ok := byID[id]; ok {
-			out = append(out, t)
-			s.tracks[id] = t
-		}
-	}
+	c, ok := s.charts[region]
 	s.mu.Unlock()
-	return out, nil
+	if ok && time.Since(c.at) < chartTTL && len(c.tracks) >= limit {
+		return c.tracks[:limit], nil
+	}
+	var vr videosResponse
+	err := s.get(ctx, "/videos", url.Values{
+		"part": {"snippet,contentDetails"}, "chart": {"mostPopular"},
+		"videoCategoryId": {musicCategory}, "regionCode": {region}, "maxResults": {strconv.Itoa(limit)},
+	}, &vr)
+	if err != nil {
+		return nil, err
+	}
+	tracks := s.remember(vr)
+	s.mu.Lock()
+	s.charts[region] = chartEntry{tracks: tracks, at: time.Now()}
+	s.mu.Unlock()
+	return tracks, nil
 }
 
 var isoDur = regexp.MustCompile(`^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$`)

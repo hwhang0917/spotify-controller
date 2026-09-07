@@ -20,7 +20,7 @@ export interface QueueItem {
 }
 
 export interface State {
-  sources: { id: string; name: string; enabled: boolean; exclusive: boolean }[]
+  sources: { id: string; name: string; enabled: boolean; exclusive: boolean; hasChart: boolean }[]
   nowPlaying: {
     track: Track
     playing: boolean

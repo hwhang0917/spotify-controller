@@ -42,7 +42,10 @@ type Server struct {
 	top    TopFunc
 }
 
-const topLimit = 10
+const (
+	topLimit   = 10
+	chartLimit = 50
+)
 
 // Error codes the guest UI translates.
 const (
@@ -89,6 +92,7 @@ func NewHandler(dist fs.FS, p *player.Player, guests *Guests, top TopFunc) http.
 			r.Post("/me", s.setMe)
 			r.Get("/search", s.search)
 			r.Get("/top", s.topTracks)
+			r.Get("/chart", s.chart)
 			r.Get("/artwork/{source}/{id}", s.artwork)
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireName)
@@ -303,6 +307,20 @@ func (s *Server) topTracks(w http.ResponseWriter, r *http.Request) {
 	tracks, err := s.top(id, topLimit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if tracks == nil {
+		tracks = []source.Track{}
+	}
+	writeJSON(w, http.StatusOK, tracks)
+}
+
+// chart lists a source's Top 50 for a region (?source=&region=).
+func (s *Server) chart(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	tracks, err := s.player.Chart(r.Context(), q.Get("source"), q.Get("region"), chartLimit)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, source.ErrorCode(err, errSearchFailed))
 		return
 	}
 	if tracks == nil {

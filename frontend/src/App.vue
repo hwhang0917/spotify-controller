@@ -269,9 +269,10 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
         </div>
       </header>
 
-      <div v-if="cfg" class="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div v-if="cfg" class="grid items-stretch gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div class="flex min-w-0 flex-col gap-6">
         <!-- Player -->
-        <Card class="overflow-hidden self-start">
+        <Card class="shrink-0 overflow-hidden">
           <CardContent class="p-0">
             <div class="flex flex-col" :class="playingSource === 'youtube' ? '' : 'sm:flex-row'">
               <!-- mounted whenever YouTube is on so it is ready before its first track; visible only while one plays -->
@@ -291,7 +292,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                       <Badge variant="outline">{{ t('now.skipVotes', { v: state?.skipVotes ?? 0, t: state?.skipThreshold ?? 1 }) }}</Badge>
                     </div>
                   </template>
-                  <p v-else class="text-lg font-medium text-muted-foreground">{{ t('now.empty') }}</p>
+                  <p v-else class="whitespace-pre-line break-keep text-lg font-medium leading-snug text-muted-foreground">{{ t('now.empty') }}</p>
                 </div>
 
                 <div class="space-y-4">
@@ -324,15 +325,15 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
           </CardContent>
         </Card>
 
-        <!-- Queue -->
-        <Card class="lg:col-start-1 lg:row-start-2">
+        <!-- Queue: fills whatever height the right column has -->
+        <Card class="flex min-h-[16rem] flex-1 flex-col">
           <CardHeader>
             <CardTitle>{{ t('queue.title') }} <Badge variant="secondary" class="ml-1">{{ state?.queue.length ?? 0 }}</Badge></CardTitle>
             <CardDescription>{{ t('queue.desc') }}</CardDescription>
           </CardHeader>
-          <CardContent class="p-0">
+          <CardContent class="min-h-0 flex-1 overflow-y-auto p-0">
             <p v-if="!state?.queue.length" class="px-6 pb-6 text-sm text-muted-foreground">{{ t('queue.emptyAdmin') }}</p>
-            <div v-else class="max-h-[28rem] overflow-y-auto">
+            <div v-else>
               <ul class="divide-y">
                 <li v-for="(it, i) in state.queue" :key="it.id" class="flex items-center gap-3 px-6 py-2.5 text-sm">
                   <span class="w-5 text-right font-mono text-xs text-muted-foreground">{{ i + 1 }}</span>
@@ -358,9 +359,10 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
             </div>
           </CardContent>
         </Card>
+        </div>
 
         <!-- Controls -->
-        <Tabs default-value="server" class="min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-2">
+        <Tabs default-value="server" class="min-w-0 self-start">
           <TabsList class="w-full">
             <TabsTrigger value="server" class="flex-1">{{ t('tab.server') }}</TabsTrigger>
             <TabsTrigger value="sources" class="flex-1">{{ t('tab.sources') }}</TabsTrigger>

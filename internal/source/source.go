@@ -60,6 +60,13 @@ type Source interface {
 	Status(ctx context.Context) (Playback, error)
 }
 
+// Charter is optional: sources that can list a popularity chart (e.g. YouTube
+// "most popular" in a region) implement it. region is an ISO 3166-1 alpha-2
+// code such as "KR"; sources may ignore it.
+type Charter interface {
+	Chart(ctx context.Context, region string, limit int) ([]Track, error)
+}
+
 // ArtworkProvider is optional. Sources whose artwork is not a public URL
 // (local files) serve it through the guest API.
 type ArtworkProvider interface {

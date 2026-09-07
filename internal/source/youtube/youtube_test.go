@@ -130,3 +130,30 @@ func TestKeyRestrictionError(t *testing.T) {
 		t.Fatalf("want ErrKeyRestricted, got %v", err)
 	}
 }
+
+func TestChartCachesPerRegion(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		q := r.URL.Query()
+		if q.Get("chart") != "mostPopular" || q.Get("videoCategoryId") != "10" || q.Get("regionCode") != "KR" {
+			t.Errorf("query: %v", q)
+		}
+		w.Write([]byte(`{"items":[{"id":"k1","snippet":{"title":"K1","channelTitle":"C"},"contentDetails":{"duration":"PT3M"}}]}`))
+	}))
+	defer srv.Close()
+	s := New(Options{APIKey: "k", APIURL: srv.URL})
+	got, err := s.Chart(context.Background(), "kr", 1)
+	if err != nil || len(got) != 1 || got[0].ID != "k1" || got[0].Source != "youtube" {
+		t.Fatalf("chart: %+v %v", got, err)
+	}
+	if _, err := s.Chart(context.Background(), "KR", 1); err != nil || calls != 1 {
+		t.Fatalf("second call should hit the cache: calls=%d err=%v", calls, err)
+	}
+	// the chart's tracks are known to Status afterwards
+	s.Report(Report{Ready: true})
+	_ = s.Play(context.Background(), "k1")
+	if pb, _ := s.Status(context.Background()); pb.Track == nil || pb.Track.Title != "K1" {
+		t.Fatalf("status should know chart tracks: %+v", pb)
+	}
+}
