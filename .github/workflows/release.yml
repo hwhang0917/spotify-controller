@@ -6,9 +6,6 @@ on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+']
 
-env:
-  GOFLAGS: -tags=webkit2_41 # ubuntu-24.04 ships webkit2gtk 4.1 only
-
 jobs:
   check-version:
     runs-on: ubuntu-latest
@@ -31,6 +28,9 @@ jobs:
           - target: linux/amd64
             os: ubuntu-latest
             artifact: vibe-music-linux-amd64.tar.gz
+            # ubuntu-24.04 ships webkit2gtk 4.1 only; wails build passes its
+            # own -tags, so GOFLAGS would be ignored here
+            tags: -tags webkit2_41
           - target: darwin/amd64
             os: macos-latest
             artifact: vibe-music-darwin-amd64.zip
@@ -63,7 +63,7 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
 
       - name: Build ${{ matrix.target }}
-        run: $(go env GOPATH)/bin/wails build -platform ${{ matrix.target }} -s -skipbindings
+        run: $(go env GOPATH)/bin/wails build -platform ${{ matrix.target }} -s -skipbindings ${{ matrix.tags }}
 
       - name: Package
         run: |
