@@ -20,6 +20,7 @@ import SpotifyIcon from './SpotifyIcon.vue'
 import YouTubePlayer from './YouTubePlayer.vue'
 import YouTubeIcon from './YouTubeIcon.vue'
 import HelpTip from './HelpTip.vue'
+import GuideDialog from './GuideDialog.vue'
 import SourceIcon from './SourceIcon.vue'
 import { toast } from 'vue-sonner'
 import { Toaster } from '@/components/ui/sonner'
@@ -488,7 +489,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
 
             <Card>
               <CardHeader>
-                <CardTitle class="flex items-center gap-2"><SpotifyIcon />{{ t('spotify.title') }}<HelpTip :text="t('spotify.help')" /></CardTitle>
+                <CardTitle class="flex items-center gap-2"><SpotifyIcon />{{ t('spotify.title') }}<GuideDialog prefix="guide.spotify" :steps="5" :links="{ 1: 'https://developer.spotify.com/dashboard' }" note="guide.spotify.note" /></CardTitle>
               </CardHeader>
               <CardContent class="space-y-4">
                 <div class="space-y-2">
@@ -519,7 +520,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
 
             <Card>
               <CardHeader>
-                <CardTitle class="flex items-center gap-2"><YouTubeIcon />{{ t('youtube.title') }}<HelpTip :text="t('youtube.help')" /></CardTitle>
+                <CardTitle class="flex items-center gap-2"><YouTubeIcon />{{ t('youtube.title') }}<GuideDialog prefix="guide.youtube" :steps="5" :links="{ 1: 'https://console.cloud.google.com/apis/library/youtube.googleapis.com', 3: 'https://console.cloud.google.com/apis/credentials' }" note="guide.youtube.note" /></CardTitle>
               </CardHeader>
               <CardContent class="space-y-3">
                 <div class="space-y-2">
