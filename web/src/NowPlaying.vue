@@ -39,7 +39,7 @@ const pct = computed(() => {
     <CardContent class="p-0">
       <div v-if="np" class="flex flex-col sm:flex-row">
         <Artwork :src="np.track.artworkUrl" :alt="np.track.album" class="aspect-square w-full sm:w-56 rounded-none" />
-        <div class="flex flex-1 flex-col justify-between gap-4 p-5">
+        <div class="flex flex-1 flex-col justify-between gap-4 px-6 py-5 sm:px-8">
           <div class="space-y-1">
             <p class="eyebrow">
               {{ t('now.eyebrow') }}<span v-if="state?.source"> · {{ state.source.name }}</span>
@@ -72,7 +72,7 @@ const pct = computed(() => {
 
       <div v-else class="flex flex-col sm:flex-row">
         <Artwork class="aspect-square w-full sm:w-56 rounded-none" />
-        <div class="flex flex-1 flex-col justify-center gap-2 p-5">
+        <div class="flex flex-1 flex-col justify-center gap-2 px-6 py-5 sm:px-8">
           <p class="eyebrow">{{ t('now.eyebrow') }}<span v-if="state?.source"> · {{ state.source.name }}</span></p>
           <p class="text-lg font-medium text-muted-foreground">{{ t('now.empty') }}</p>
         </div>

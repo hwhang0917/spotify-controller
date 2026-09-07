@@ -134,6 +134,9 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
           <Badge v-if="server.running" variant="outline" class="gap-1.5">
             <span class="size-1.5 rounded-full bg-link" /><Users />{{ t('server.guests', { n: online }) }}
           </Badge>
+          <Button :variant="server.running ? 'outline' : 'default'" :disabled="!!busy" @click="toggleServer">
+            <Power />{{ server.running ? t('server.stop') : t('server.start') }}
+          </Button>
           <Button variant="ghost" size="xs" class="font-mono text-muted-foreground" @click="setLocale(locale === 'en' ? 'ko' : 'en')">
             {{ locale === 'en' ? 'KO' : 'EN' }}
           </Button>
@@ -146,7 +149,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
           <CardContent class="p-0">
             <div class="flex flex-col sm:flex-row">
               <Artwork :src="np?.track.artworkUrl?.startsWith('http') ? np.track.artworkUrl : undefined" class="aspect-square w-full sm:w-64 rounded-none" />
-              <div class="flex flex-1 flex-col justify-between gap-5 p-6">
+              <div class="flex flex-1 flex-col justify-between gap-5 px-8 py-6">
                 <div class="space-y-1">
                   <p class="eyebrow">{{ t('now') }}<span v-if="state?.source"> · {{ state.source.name }}</span></p>
                   <template v-if="np">
@@ -221,12 +224,8 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
               <CardContent class="space-y-5">
                 <div class="space-y-2">
                   <Label for="port">{{ t('server.port') }}</Label>
-                  <div class="flex gap-2">
-                    <Input id="port" v-model.number="server.port" type="number" :disabled="server.running" class="w-32 font-mono" />
-                    <Button :variant="server.running ? 'outline' : 'default'" :disabled="!!busy" @click="toggleServer">
-                      <Power />{{ server.running ? t('server.stop') : t('server.start') }}
-                    </Button>
-                  </div>
+                  <Input id="port" v-model.number="server.port" type="number" :disabled="server.running" class="w-32 font-mono" />
+                  <p class="text-xs text-muted-foreground">{{ t('server.portHint') }}</p>
                 </div>
                 <div v-if="server.running" class="space-y-1">
                   <Label>{{ t('server.joinUrl') }}</Label>
