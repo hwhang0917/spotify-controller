@@ -355,3 +355,37 @@ func TestSeekBroadcastsEvent(t *testing.T) {
 		t.Fatalf("skip event: %+v", s.Event)
 	}
 }
+
+func TestPersistAndRestore(t *testing.T) {
+	p, _ := setup(t)
+	ctx := context.Background()
+	var saved [][]PersistedItem
+	p.SetPersister(func(items []PersistedItem) { saved = append(saved, items) })
+
+	_ = p.Request(ctx, a, g1) // plays immediately: queue stays empty, nothing to persist
+	_ = p.Request(ctx, b, g1)
+	_ = p.Request(ctx, c, g2)
+	_ = p.Vote(p.State().Queue[1].ID, g1.ID)
+	p.Tick(ctx) // no queue change: no extra save
+	if len(saved) != 3 {
+		t.Fatalf("saves = %d, want 3 (b, c, vote)", len(saved))
+	}
+	last := saved[len(saved)-1]
+	if len(last) != 2 || last[0].Track.ID != "c" || len(last[0].Votes) != 2 || last[0].RequestedByName != "Lee" {
+		t.Fatalf("persisted: %+v", last)
+	}
+
+	// a fresh player restores the same order and votes
+	f2 := fake.New(a, b, c)
+	p2 := New(Options{Sources: []source.Source{f2}})
+	_ = p2.SetSource(ctx, "fake")
+	p2.Restore(last)
+	s := p2.State()
+	eq(t, queueIDs(s), []string{"c", "b"})
+	if s.Queue[0].Votes != 2 || s.Queue[0].RequestedByName != "Lee" {
+		t.Fatalf("restored: %+v", s.Queue[0])
+	}
+	// and starts playing the head on the next tick
+	p2.Tick(ctx)
+	eq(t, f2.Played(), []string{"c"})
+}

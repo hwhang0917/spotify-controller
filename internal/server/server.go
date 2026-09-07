@@ -21,6 +21,7 @@ import (
 
 	"github.com/hwhang0917/vibe-music/internal/player"
 	"github.com/hwhang0917/vibe-music/internal/source"
+	"github.com/hwhang0917/vibe-music/internal/store"
 )
 
 const (
@@ -44,21 +45,29 @@ const (
 	errBlocked      = "blocked"
 	errNotInQueue   = "not_in_queue"
 	errNotOwner     = "not_owner"
+	errInviteNeeded = "invite_required"
 	errTrackNeeded  = "track_required"
 	errNoPlayer     = "player_not_running"
 )
 
+// joinPath is where an invitation link lands: /join?invitationCode=XXXX-XXXX.
+const (
+	joinPath   = "/join"
+	joinParam  = "invitationCode"
+	invalidURL = "/?invite=invalid"
+)
+
 // NewHandler wires the API and serves dist (a built Vite app) as an SPA:
 // unknown paths fall back to index.html so client-side routing works.
-// guests may be nil for a standalone handler; the app passes its own so the
-// admin window can manage them.
 func NewHandler(dist fs.FS, p *player.Player, guests *Guests) http.Handler {
 	if guests == nil {
-		guests = NewGuests(nil, nil)
+		panic(errNoStore)
 	}
 	s := &Server{player: p, guests: guests}
 	r := chi.NewRouter()
 	r.Use(middleware.Logger, middleware.Recoverer)
+
+	r.Get(joinPath, s.join)
 
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -90,27 +99,57 @@ type ctxKey int
 
 const guestKey ctxKey = 0
 
-// guest issues the anonymous cookie on first visit and puts the Guest in ctx.
+// guestID returns the caller's identity: the SHA-256 of their cookie, issuing
+// a cookie first if they have none. Only the hash ever leaves this function.
+func guestID(w http.ResponseWriter, r *http.Request) string {
+	secret := ""
+	if c, err := r.Cookie(guestCookie); err == nil && len(c.Value) == 32 {
+		secret = c.Value
+	}
+	if secret == "" {
+		secret = newGuestID()
+		http.SetCookie(w, &http.Cookie{
+			Name: guestCookie, Value: secret, Path: "/", MaxAge: cookieMaxAge,
+			HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		})
+	}
+	return store.Hash(secret)
+}
+
+// guest records the visit, enforces blocks and invite-only, and puts the Guest in ctx.
 func (s *Server) guest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := ""
-		if c, err := r.Cookie(guestCookie); err == nil && len(c.Value) == 32 {
-			id = c.Value
-		}
-		if id == "" {
-			id = newGuestID()
-			http.SetCookie(w, &http.Cookie{
-				Name: guestCookie, Value: id, Path: "/", MaxAge: cookieMaxAge,
-				HttpOnly: true, SameSite: http.SameSiteLaxMode,
-			})
-		}
-		if s.guests.isBlocked(id) {
-			writeError(w, http.StatusForbidden, errBlocked)
+		id := guestID(w, r)
+		gu, err := s.guests.seen(id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		g := player.Guest{ID: id, Name: s.guests.seen(id)}
+		switch {
+		case gu.Blocked:
+			writeError(w, http.StatusForbidden, errBlocked)
+			return
+		case s.guests.InviteOnly() && !gu.Admitted:
+			writeError(w, http.StatusForbidden, errInviteNeeded)
+			return
+		}
+		g := player.Guest{ID: id, Name: gu.Name}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), guestKey, g)))
 	})
+}
+
+// join redeems an invitation link and sends the guest to the page.
+func (s *Server) join(w http.ResponseWriter, r *http.Request) {
+	id := guestID(w, r)
+	if gu, err := s.guests.db.Seen(id, time.Now()); err != nil || gu.Blocked {
+		writeError(w, http.StatusForbidden, errBlocked)
+		return
+	}
+	if err := s.guests.Redeem(r.URL.Query().Get(joinParam), id); err != nil {
+		http.Redirect(w, r, invalidURL, http.StatusFound)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 func guestFrom(r *http.Request) player.Guest {
@@ -215,7 +254,10 @@ func (s *Server) setMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	g := guestFrom(r)
-	s.guests.setName(g.ID, name)
+	if err := s.guests.setName(g.ID, name); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": g.ID, "name": name})
 }
 

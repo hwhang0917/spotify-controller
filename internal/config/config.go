@@ -1,5 +1,6 @@
-// Package config persists host settings: guest port, active source, and the
-// per-source settings the admin enters. Lives in the OS user config dir.
+// Package config holds host settings. Settings persist as one JSON blob in the
+// store; the Spotify token lives in a separate 0600 file next to the database
+// so the database itself never contains a credential.
 package config
 
 import (
@@ -12,24 +13,25 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// EnvPath overrides the config file location (tests, dev).
-const EnvPath = "VIBE_MUSIC_CONFIG"
+// EnvDir overrides the data directory (tests, dev).
+const EnvDir = "VIBE_MUSIC_DIR"
 
 const (
 	DefaultPort      = 5555
 	DefaultSkipRatio = 0.5
 	appDirName       = "vibe-music"
-	fileName         = "config.json"
+	DBFile           = "vibe-music.db"
+	tokenFile        = "spotify-token.json"
+	settingsKey      = "config"
 )
 
 type Config struct {
 	Port         int     `json:"port"`
 	ActiveSource string  `json:"activeSource"`
 	SkipRatio    float64 `json:"skipRatio"`
+	InviteOnly   bool    `json:"inviteOnly"`
 	Local        Local   `json:"local"`
 	Spotify      Spotify `json:"spotify"`
-	// Blocked guest IDs (cookie IDs). Managed from the admin window.
-	Blocked []string `json:"blocked"`
 }
 
 type Local struct {
@@ -37,11 +39,14 @@ type Local struct {
 }
 
 type Spotify struct {
-	ClientID string        `json:"clientId"`
-	DeviceID string        `json:"deviceId,omitempty"`
-	Token    *oauth2.Token `json:"token,omitempty"`
-	// ponytail: refresh token stored in plaintext (0600). Move to the OS keychain
-	// if this ever runs somewhere other than a single trusted host PC.
+	ClientID string `json:"clientId"`
+	DeviceID string `json:"deviceId,omitempty"`
+}
+
+// KV is what config needs from the store.
+type KV interface {
+	Get(key string) ([]byte, error)
+	Set(key string, v []byte) error
 }
 
 func Default() Config {
@@ -56,55 +61,83 @@ func (c *Config) normalize() {
 	if c.Local.Folders == nil {
 		c.Local.Folders = []string{}
 	}
-	if c.Blocked == nil {
-		c.Blocked = []string{}
-	}
 }
 
-// Path returns the config file location.
-func Path() (string, error) {
-	if p := os.Getenv(EnvPath); p != "" {
-		return p, nil
+// Dir returns the data directory (created on demand).
+func Dir() (string, error) {
+	dir := os.Getenv(EnvDir)
+	if dir == "" {
+		base, err := os.UserConfigDir()
+		if err != nil {
+			return "", fmt.Errorf("config dir: %w", err)
+		}
+		dir = filepath.Join(base, appDirName)
 	}
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("config dir: %w", err)
-	}
-	return filepath.Join(dir, appDirName, fileName), nil
+	return dir, os.MkdirAll(dir, 0o700)
 }
 
-// Load reads the config, creating a default file if none exists.
-func Load() (Config, error) {
-	p, err := Path()
+// Load reads settings from kv, saving defaults when none exist.
+func Load(kv KV) (Config, error) {
+	data, err := kv.Get(settingsKey)
 	if err != nil {
-		return Config{}, err
-	}
-	data, err := os.ReadFile(p)
-	if errors.Is(err, os.ErrNotExist) {
 		c := Default()
-		return c, Save(c)
-	}
-	if err != nil {
-		return Config{}, err
+		return c, Save(kv, c)
 	}
 	c := Default()
 	if err := json.Unmarshal(data, &c); err != nil {
-		return Config{}, fmt.Errorf("parse %s: %w", p, err)
+		return Config{}, fmt.Errorf("parse settings: %w", err)
 	}
 	c.normalize()
 	return c, nil
 }
 
-// Save writes atomically with 0600 permissions.
-func Save(c Config) error {
-	p, err := Path()
+func Save(kv KV, c Config) error {
+	c.normalize()
+	data, err := json.Marshal(c)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+	return kv.Set(settingsKey, data)
+}
+
+// LoadToken returns nil, nil when no token is stored.
+// ponytail: plaintext file, 0600, same protection as the database itself.
+// Encrypting it with a key stored beside it would add nothing; the OS
+// keychain is the upgrade path if this ever runs on a shared machine.
+func LoadToken() (*oauth2.Token, error) {
+	dir, err := Dir()
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(filepath.Join(dir, tokenFile))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var tok oauth2.Token
+	if err := json.Unmarshal(data, &tok); err != nil {
+		return nil, err
+	}
+	return &tok, nil
+}
+
+// SaveToken writes atomically with 0600; nil removes the file.
+func SaveToken(tok *oauth2.Token) error {
+	dir, err := Dir()
+	if err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(c, "", "  ")
+	p := filepath.Join(dir, tokenFile)
+	if tok == nil {
+		err := os.Remove(p)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	data, err := json.Marshal(tok)
 	if err != nil {
 		return err
 	}

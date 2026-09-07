@@ -6,10 +6,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
+
+	"github.com/hwhang0917/vibe-music/internal/store"
 
 	"github.com/hwhang0917/vibe-music/internal/player"
 	"github.com/hwhang0917/vibe-music/internal/source"
@@ -21,7 +24,17 @@ var dist = fstest.MapFS{
 	"assets/app.js": {Data: []byte("console.log(1)")},
 }
 
-func newTestServer(t *testing.T) (*httptest.Server, *fake.Source) {
+func newGuests(t *testing.T, onChange func()) *Guests {
+	t.Helper()
+	db, err := store.Open(filepath.Join(t.TempDir(), "vibe.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return NewGuests(db, false, onChange)
+}
+
+func newTestServer(t *testing.T) (*httptest.Server, *fake.Source, *Guests) {
 	t.Helper()
 	f := fake.New(
 		source.Track{ID: "a", Title: "Alpha", Artist: "X"},
@@ -31,9 +44,10 @@ func newTestServer(t *testing.T) (*httptest.Server, *fake.Source) {
 	if err := p.SetSource(context.Background(), "fake"); err != nil {
 		t.Fatal(err)
 	}
-	ts := httptest.NewServer(NewHandler(dist, p, nil))
+	guests := newGuests(t, nil)
+	ts := httptest.NewServer(NewHandler(dist, p, guests))
 	t.Cleanup(ts.Close)
-	return ts, f
+	return ts, f, guests
 }
 
 // client is a guest with a cookie jar.
@@ -63,7 +77,7 @@ func (c *client) do(method, p string, body string) (*http.Response, map[string]a
 }
 
 func TestStaticAndSPA(t *testing.T) {
-	ts, _ := newTestServer(t)
+	ts, _, guests := newTestServer(t)
 	c := newClient(t, ts.URL)
 	for _, p := range []string{"/", "/vote/abc"} {
 		res, _ := c.do("GET", p, "")
@@ -76,14 +90,14 @@ func TestStaticAndSPA(t *testing.T) {
 		t.Fatalf("static: %d", res.StatusCode)
 	}
 	rec := httptest.NewRecorder()
-	NewHandler(fstest.MapFS{}, nil, nil).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	NewHandler(fstest.MapFS{}, nil, guests).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("unbuilt UI: %d", rec.Code)
 	}
 }
 
 func TestGuestFlow(t *testing.T) {
-	ts, f := newTestServer(t)
+	ts, f, _ := newTestServer(t)
 	kim := newClient(t, ts.URL)
 	lee := newClient(t, ts.URL)
 
@@ -175,7 +189,7 @@ func TestGuestFlow(t *testing.T) {
 }
 
 func TestEventsCountsDistinctGuests(t *testing.T) {
-	ts, _ := newTestServer(t)
+	ts, _, _ := newTestServer(t)
 	kim := newClient(t, ts.URL)
 	kim.do("GET", "/api/me", "") // get a cookie
 
@@ -238,7 +252,7 @@ func TestEventsCountsDistinctGuests(t *testing.T) {
 
 func TestBlockAndKick(t *testing.T) {
 	changes := 0
-	guests := NewGuests(nil, func() { changes++ })
+	guests := newGuests(t, func() { changes++ })
 	f := fake.New(source.Track{ID: "a", Title: "Alpha"})
 	p := player.New(player.Options{Sources: []source.Source{f}})
 	p.SetSource(context.Background(), "fake")
@@ -248,8 +262,14 @@ func TestBlockAndKick(t *testing.T) {
 	kim := newClient(t, ts.URL)
 	_, me := kim.do("POST", "/api/me", `{"name":"Kim"}`)
 	id := me["id"].(string)
-	if list := guests.List(); len(list) != 1 || list[0].Name != "Kim" || list[0].ID != id {
+	if list, _ := guests.List(); len(list) != 1 || list[0].Name != "Kim" || list[0].ID != id {
 		t.Fatalf("list: %+v", list)
+	}
+	// the id handed out is a hash, never the cookie itself
+	for _, c := range kim.http.Jar.Cookies(nil) {
+		if c.Value == id {
+			t.Fatal("guest id must not equal the cookie")
+		}
 	}
 
 	// open a stream, then kick: the stream ends
@@ -275,8 +295,8 @@ func TestBlockAndKick(t *testing.T) {
 	if r.StatusCode != 403 || out["error"] != "blocked" {
 		t.Fatalf("blocked: %d %v", r.StatusCode, out)
 	}
-	if b := guests.Blocked(); len(b) != 1 || b[0] != id {
-		t.Fatalf("blocked list: %v", b)
+	if list, _ := guests.List(); len(list) != 1 || !list[0].Blocked {
+		t.Fatalf("blocked list: %v", list)
 	}
 	guests.SetBlocked(id, false)
 	if r, _ := kim.do("GET", "/api/me", ""); r.StatusCode != 200 {
@@ -302,4 +322,76 @@ func waitFor(t *testing.T, cond func() bool) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("condition not met")
+}
+
+func TestInviteOnly(t *testing.T) {
+	ts, _, guests := newTestServer(t)
+	// no redirects: we want to see the 302s
+	noRedirect := func(c *client) {
+		c.http.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	}
+
+	kim := newClient(t, ts.URL)
+	kim.do("POST", "/api/me", `{"name":"Kim"}`) // already here before the switch
+
+	if err := guests.SetInviteOnly(true); err != nil {
+		t.Fatal(err)
+	}
+	if res, _ := kim.do("GET", "/api/me", ""); res.StatusCode != 200 {
+		t.Fatalf("existing guest should stay admitted: %d", res.StatusCode)
+	}
+
+	lee := newClient(t, ts.URL)
+	noRedirect(lee)
+	if res, out := lee.do("GET", "/api/me", ""); res.StatusCode != 403 || out["error"] != "invite_required" {
+		t.Fatalf("newcomer: %d %v", res.StatusCode, out)
+	}
+	if res, _ := lee.do("GET", "/join?invitationCode=NOPE-NOPE", ""); res.StatusCode != 302 || res.Header.Get("Location") != invalidURL {
+		t.Fatalf("bad code: %d %s", res.StatusCode, res.Header.Get("Location"))
+	}
+
+	inv, err := guests.CreateInvitation(time.Hour)
+	if err != nil || inv.Code == "" || inv.Label != inv.Code[len(inv.Code)-4:] {
+		t.Fatalf("create: %+v %v", inv, err)
+	}
+	if res, _ := lee.do("GET", "/join?invitationCode="+inv.Code, ""); res.StatusCode != 302 || res.Header.Get("Location") != "/" {
+		t.Fatalf("good code: %d %s", res.StatusCode, res.Header.Get("Location"))
+	}
+	if res, _ := lee.do("GET", "/api/me", ""); res.StatusCode != 200 {
+		t.Fatalf("admitted guest: %d", res.StatusCode)
+	}
+	list, _ := guests.Invitations()
+	if len(list) != 1 || list[0].Uses != 1 || list[0].Code != inv.Code {
+		t.Fatalf("invitations: %+v", list)
+	}
+
+	// revoked codes stop working; admin can still admit by hand
+	guests.RevokeInvitation(inv.ID)
+	park := newClient(t, ts.URL)
+	noRedirect(park)
+	if res, _ := park.do("GET", "/join?invitationCode="+inv.Code, ""); res.Header.Get("Location") != invalidURL {
+		t.Fatal("revoked code should be invalid")
+	}
+	_, me := park.do("GET", "/api/me", "") // 403, but the guest is now known
+	_ = me
+	gl, _ := guests.List()
+	var parkID string
+	for _, g := range gl {
+		if !g.Admitted {
+			parkID = g.ID
+		}
+	}
+	if parkID == "" {
+		t.Fatalf("park should be listed as not admitted: %+v", gl)
+	}
+	guests.Admit(parkID)
+	if res, _ := park.do("GET", "/api/me", ""); res.StatusCode != 200 {
+		t.Fatalf("admitted by admin: %d", res.StatusCode)
+	}
+
+	guests.SetInviteOnly(false)
+	stranger := newClient(t, ts.URL)
+	if res, _ := stranger.do("GET", "/api/me", ""); res.StatusCode != 200 {
+		t.Fatalf("open mode: %d", res.StatusCode)
+	}
 }

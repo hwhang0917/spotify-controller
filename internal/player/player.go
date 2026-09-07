@@ -99,6 +99,8 @@ type Player struct {
 	subs      map[chan State]struct{}
 	lastSig   string
 	pending   *Event // attached to the next broadcast, which is then forced
+	persist   func([]PersistedItem)
+	lastQueue string
 	poll      time.Duration
 	skipRatio float64
 }
@@ -432,6 +434,70 @@ func (p *Player) State() State {
 	return p.snapshot()
 }
 
+// PersistedItem is a queue entry as stored across relaunches.
+type PersistedItem struct {
+	ID              string
+	Track           source.Track
+	RequestedBy     string
+	RequestedByName string
+	RequestedAt     time.Time
+	Rank            int
+	Votes           []string
+}
+
+// SetPersister registers a callback that receives the whole queue whenever it
+// changes. It runs under the player lock, so it must be quick (a local
+// SQLite write is). ponytail: synchronous; hand it a channel if it ever blocks.
+func (p *Player) SetPersister(fn func([]PersistedItem)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.persist = fn
+}
+
+// Restore loads a previously persisted queue (at startup, before Run).
+func (p *Player) Restore(items []PersistedItem) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.queue = p.queue[:0]
+	for _, it := range items {
+		votes := make(map[string]struct{}, len(it.Votes))
+		for _, v := range it.Votes {
+			votes[v] = struct{}{}
+		}
+		p.queue = append(p.queue, &QueueItem{
+			ID: it.ID, Track: it.Track, RequestedBy: it.RequestedBy, RequestedByName: it.RequestedByName,
+			RequestedAt: it.RequestedAt, rank: it.Rank, votes: votes,
+		})
+	}
+	p.sortQueue()
+	p.lastQueue = p.queueSig()
+	p.broadcastIfChanged()
+}
+
+func (p *Player) persisted() []PersistedItem {
+	out := make([]PersistedItem, 0, len(p.queue))
+	for _, it := range p.queue {
+		votes := make([]string, 0, len(it.votes))
+		for v := range it.votes {
+			votes = append(votes, v)
+		}
+		sort.Strings(votes)
+		out = append(out, PersistedItem{
+			ID: it.ID, Track: it.Track, RequestedBy: it.RequestedBy, RequestedByName: it.RequestedByName,
+			RequestedAt: it.RequestedAt, Rank: it.rank, Votes: votes,
+		})
+	}
+	return out
+}
+
+func (p *Player) queueSig() string {
+	sig := ""
+	for _, it := range p.queue {
+		sig += fmt.Sprintf("%s:%d:%d,", it.ID, it.rank, len(it.votes))
+	}
+	return sig
+}
+
 // Subscribe returns a channel receiving every state change. Slow readers drop
 // frames rather than block the player.
 func (p *Player) Subscribe() (<-chan State, func()) {
@@ -535,6 +601,12 @@ func (s State) signature() string {
 }
 
 func (p *Player) broadcastIfChanged() {
+	if q := p.queueSig(); q != p.lastQueue {
+		p.lastQueue = q
+		if p.persist != nil {
+			p.persist(p.persisted())
+		}
+	}
 	s := p.snapshot()
 	sig := s.signature()
 	if sig == p.lastSig && p.pending == nil {

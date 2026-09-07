@@ -4,44 +4,74 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/oauth2"
 )
 
-func TestLoadCreatesDefaultThenRoundTrips(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "sub", "config.json")
-	t.Setenv(EnvPath, p)
+type mapKV map[string][]byte
 
-	c, err := Load()
+func (m mapKV) Get(k string) ([]byte, error) {
+	v, ok := m[k]
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	return v, nil
+}
+func (m mapKV) Set(k string, v []byte) error { m[k] = v; return nil }
+
+func TestLoadDefaultsThenRoundTrips(t *testing.T) {
+	kv := mapKV{}
+	c, err := Load(kv)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Port != DefaultPort || c.ActiveSource != "local" {
+	if c.Port != DefaultPort || c.ActiveSource != "local" || c.Local.Folders == nil || c.InviteOnly {
 		t.Fatalf("defaults: %+v", c)
 	}
-	// slices must be [] not null: the admin UI calls .join on folders
-	if c.Local.Folders == nil || c.Blocked == nil {
-		t.Fatalf("nil slices: %+v", c)
-	}
-	if err := os.WriteFile(p, []byte(`{"local":{"folders":null}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if c2, _ := Load(); c2.Local.Folders == nil || c2.Blocked == nil {
-		t.Fatalf("null in file should normalize to []: %+v", c2)
-	}
-	Save(c)
-	if fi, err := os.Stat(p); err != nil || fi.Mode().Perm() != 0o600 {
-		t.Fatalf("stat: %v %v", fi, err)
+	if _, ok := kv[settingsKey]; !ok {
+		t.Fatal("defaults should be saved")
 	}
 
 	c.Local.Folders = []string{"/music"}
 	c.Spotify.ClientID = "abc"
-	if err := Save(c); err != nil {
+	c.InviteOnly = true
+	if err := Save(kv, c); err != nil {
 		t.Fatal(err)
 	}
-	c2, err := Load()
-	if err != nil {
+	c2, err := Load(kv)
+	if err != nil || c2.Local.Folders[0] != "/music" || c2.Spotify.ClientID != "abc" || !c2.InviteOnly || c2.SkipRatio != DefaultSkipRatio {
+		t.Fatalf("round trip: %+v %v", c2, err)
+	}
+	// null slices in stored JSON normalize to []
+	kv[settingsKey] = []byte(`{"local":{"folders":null}}`)
+	if c3, _ := Load(kv); c3.Local.Folders == nil {
+		t.Fatal("null folders should normalize to []")
+	}
+}
+
+func TestTokenFile(t *testing.T) {
+	t.Setenv(EnvDir, filepath.Join(t.TempDir(), "data"))
+	if tok, err := LoadToken(); tok != nil || err != nil {
+		t.Fatalf("missing token: %v %v", tok, err)
+	}
+	if err := SaveToken(&oauth2.Token{AccessToken: "a", RefreshToken: "r"}); err != nil {
 		t.Fatal(err)
 	}
-	if c2.Local.Folders[0] != "/music" || c2.Spotify.ClientID != "abc" || c2.SkipRatio != DefaultSkipRatio {
-		t.Fatalf("round trip: %+v", c2)
+	dir, _ := Dir()
+	if fi, err := os.Stat(filepath.Join(dir, tokenFile)); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("token perms: %v %v", fi, err)
+	}
+	tok, err := LoadToken()
+	if err != nil || tok.RefreshToken != "r" {
+		t.Fatalf("load: %+v %v", tok, err)
+	}
+	if err := SaveToken(nil); err != nil {
+		t.Fatal(err)
+	}
+	if tok, _ := LoadToken(); tok != nil {
+		t.Fatal("token should be removed")
+	}
+	if err := SaveToken(nil); err != nil {
+		t.Fatal("removing twice should be fine")
 	}
 }

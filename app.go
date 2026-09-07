@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -20,6 +22,7 @@ import (
 	"github.com/hwhang0917/vibe-music/internal/source"
 	"github.com/hwhang0917/vibe-music/internal/source/local"
 	"github.com/hwhang0917/vibe-music/internal/source/spotify"
+	"github.com/hwhang0917/vibe-music/internal/store"
 	"github.com/hwhang0917/vibe-music/web"
 )
 
@@ -103,6 +106,7 @@ type App struct {
 
 	mu      sync.Mutex
 	cfg     config.Config
+	db      *store.Store
 	srv     *http.Server
 	url     string
 	player  *player.Player
@@ -131,18 +135,30 @@ func NewApp() *App { return &App{} }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	cfg, err := config.Load()
+	dir, err := config.Dir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	a.db, err = store.Open(filepath.Join(dir, config.DBFile))
+	if err != nil {
+		log.Fatal(err)
+	}
+	cfg, err := config.Load(a.db)
 	if err != nil {
 		log.Println("config:", err)
 		cfg = config.Default()
 	}
 	a.cfg = cfg
+	token, err := config.LoadToken()
+	if err != nil {
+		log.Println("spotify token:", err)
+	}
 
 	a.local = local.New(cfg.Local.Folders)
 	a.spotify = spotify.New(spotify.Options{
 		ClientID:    cfg.Spotify.ClientID,
 		DeviceID:    cfg.Spotify.DeviceID,
-		Token:       cfg.Spotify.Token,
+		Token:       token,
 		SaveToken:   a.saveSpotifyToken,
 		OpenBrowser: func(u string) error { runtime.BrowserOpenURL(ctx, u); return nil },
 	})
@@ -150,8 +166,20 @@ func (a *App) startup(ctx context.Context) {
 		Sources:   []source.Source{a.local, a.spotify},
 		SkipRatio: cfg.SkipRatio,
 	})
-	a.guests = server.NewGuests(cfg.Blocked, func() {
-		runtime.EventsEmit(a.ctx, guestsEvent, a.guests.List())
+	a.player.SetPersister(func(items []player.PersistedItem) {
+		if err := a.db.SaveQueue(toRows(items)); err != nil {
+			log.Println("save queue:", err)
+		}
+	})
+	if rows, err := a.db.LoadQueue(); err == nil {
+		a.player.Restore(fromRows(rows))
+	} else {
+		log.Println("load queue:", err)
+	}
+	a.guests = server.NewGuests(a.db, cfg.InviteOnly, func() {
+		if list, err := a.guests.List(); err == nil {
+			runtime.EventsEmit(a.ctx, guestsEvent, list)
+		}
 	})
 
 	runCtx, cancel := context.WithCancel(context.Background())
@@ -172,6 +200,36 @@ func (a *App) shutdown(ctx context.Context) {
 	if src := a.player.ActiveSource(); src != nil {
 		_ = src.Deactivate(ctx)
 	}
+	if a.db != nil {
+		_ = a.db.Close()
+	}
+}
+
+func toRows(items []player.PersistedItem) []store.QueueRow {
+	out := make([]store.QueueRow, 0, len(items))
+	for _, it := range items {
+		track, _ := json.Marshal(it.Track)
+		out = append(out, store.QueueRow{
+			ID: it.ID, Track: track, RequestedBy: it.RequestedBy, RequestedByName: it.RequestedByName,
+			RequestedAt: it.RequestedAt, Rank: it.Rank, Votes: it.Votes,
+		})
+	}
+	return out
+}
+
+func fromRows(rows []store.QueueRow) []player.PersistedItem {
+	out := make([]player.PersistedItem, 0, len(rows))
+	for _, r := range rows {
+		var track source.Track
+		if err := json.Unmarshal(r.Track, &track); err != nil {
+			continue // a row we cannot read is not worth crashing over
+		}
+		out = append(out, player.PersistedItem{
+			ID: r.ID, Track: track, RequestedBy: r.RequestedBy, RequestedByName: r.RequestedByName,
+			RequestedAt: r.RequestedAt, Rank: r.Rank, Votes: r.Votes,
+		})
+	}
+	return out
 }
 
 // forwardState pushes player snapshots to the admin window as Wails events.
@@ -189,13 +247,17 @@ func (a *App) forwardState(ctx context.Context) {
 }
 
 func (a *App) saveSpotifyToken(tok *oauth2.Token) {
-	a.mu.Lock()
-	a.cfg.Spotify.Token = tok
-	cfg := a.cfg
-	a.mu.Unlock()
-	if err := config.Save(cfg); err != nil {
+	if err := config.SaveToken(tok); err != nil {
 		log.Println("save token:", err)
 	}
+}
+
+// saveConfig persists the in-memory config.
+func (a *App) saveConfig() error {
+	a.mu.Lock()
+	cfg := a.cfg
+	a.mu.Unlock()
+	return config.Save(a.db, cfg)
 }
 
 // --- config ---
@@ -207,16 +269,16 @@ func (a *App) GetConfig() config.Config {
 }
 
 // SaveConfig persists and applies settings. Changing the Spotify Client ID
-// requires SpotifyConnect afterwards; the token is kept as-is here.
+// requires SpotifyConnect afterwards. InviteOnly is toggled via SetInviteOnly.
 func (a *App) SaveConfig(c config.Config) error {
 	if c.Local.Folders == nil {
 		c.Local.Folders = []string{}
 	}
 	a.mu.Lock()
-	c.Spotify.Token = a.cfg.Spotify.Token
+	c.InviteOnly = a.cfg.InviteOnly
 	a.cfg = c
 	a.mu.Unlock()
-	if err := config.Save(c); err != nil {
+	if err := config.Save(a.db, c); err != nil {
 		return err
 	}
 	a.local.SetFolders(c.Local.Folders)
@@ -258,9 +320,8 @@ func (a *App) SetActiveSource(id string) error {
 	}
 	a.mu.Lock()
 	a.cfg.ActiveSource = id
-	cfg := a.cfg
 	a.mu.Unlock()
-	return config.Save(cfg)
+	return a.saveConfig()
 }
 
 func (a *App) LocalRescan() (int, error) { return a.local.Rescan() }
@@ -280,31 +341,54 @@ func (a *App) SpotifyDevices() ([]spotify.Device, error) {
 	return d, uiError(err)
 }
 
-// --- guests ---
+// --- guests & invitations ---
 
-func (a *App) Guests() []server.GuestInfo { return a.guests.List() }
+func (a *App) Guests() ([]server.GuestInfo, error) { return a.guests.List() }
+
+// SetInviteOnly toggles invitation-only access. Turning it on keeps everyone
+// already known admitted; newcomers need a code.
+func (a *App) SetInviteOnly(on bool) error {
+	if err := a.guests.SetInviteOnly(on); err != nil {
+		return err
+	}
+	a.mu.Lock()
+	a.cfg.InviteOnly = on
+	a.mu.Unlock()
+	return a.saveConfig()
+}
+
+// AdmitGuest lets a specific guest in without a code.
+func (a *App) AdmitGuest(id string) error { return a.guests.Admit(id) }
+
+// CreateInvitation makes a code valid for ttlMinutes; the plaintext is only
+// available in the returned value and in this session's list.
+func (a *App) CreateInvitation(ttlMinutes int) (server.Invitation, error) {
+	if ttlMinutes <= 0 {
+		return server.Invitation{}, errors.New("ttl must be positive")
+	}
+	return a.guests.CreateInvitation(time.Duration(ttlMinutes) * time.Minute)
+}
+
+func (a *App) Invitations() ([]server.Invitation, error) { return a.guests.Invitations() }
+
+func (a *App) RevokeInvitation(id int64) error { return a.guests.RevokeInvitation(id) }
 
 // KickGuest drops the guest's live connections; they can reconnect.
 func (a *App) KickGuest(id string) { a.guests.Kick(id) }
 
 // RemoveGuest forgets the guest and everything they queued or voted for.
-func (a *App) RemoveGuest(id string) {
-	a.guests.Remove(id)
+func (a *App) RemoveGuest(id string) error {
 	a.player.RemoveGuest(id)
+	return a.guests.Remove(id)
 }
 
-// BlockGuest toggles the block list and persists it. Blocking also removes
-// the guest's requests and votes.
+// BlockGuest toggles the (persisted) block. Blocking also removes the guest's
+// requests and votes.
 func (a *App) BlockGuest(id string, blocked bool) error {
-	a.guests.SetBlocked(id, blocked)
 	if blocked {
 		a.player.RemoveGuest(id)
 	}
-	a.mu.Lock()
-	a.cfg.Blocked = a.guests.Blocked()
-	cfg := a.cfg
-	a.mu.Unlock()
-	return config.Save(cfg)
+	return a.guests.SetBlocked(id, blocked)
 }
 
 // --- queue (admin override) ---
@@ -353,7 +437,7 @@ func (a *App) StartServer(port int) (string, error) {
 	a.srv = srv
 	a.url = fmt.Sprintf("http://%s:%d", lanIP(), port)
 	a.cfg.Port = port
-	if err := config.Save(a.cfg); err != nil {
+	if err := config.Save(a.db, a.cfg); err != nil {
 		log.Println("save config:", err)
 	}
 	return a.url, nil
