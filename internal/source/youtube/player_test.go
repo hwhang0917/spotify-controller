@@ -12,8 +12,9 @@ func TestServePlayerServesEmbedPage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(url, "http://127.0.0.1:") {
-		t.Fatalf("want loopback http URL, got %q", url)
+	// a name, not an IP: YouTube refuses licensed music for IP-literal origins
+	if !strings.HasPrefix(url, "http://localhost:") {
+		t.Fatalf("want http://localhost URL, got %q", url)
 	}
 	res, err := http.Get(url + "/?blocked=x")
 	if err != nil {

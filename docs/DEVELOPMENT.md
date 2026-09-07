@@ -40,7 +40,10 @@ the [README](../README.md).
   Search and charts go through the Data API v3 with the host's key; playback
   is the IFrame player in the admin window, framed from a loopback http page
   Go serves (`player.html`) because YouTube refuses embeds without a Referer
-  (error 153) and the `wails://` origin on Linux/macOS sends none. Go drives
+  (error 153) and the `wails://` origin on Linux/macOS sends none. The page is
+  addressed as `http://localhost:<port>`, never by IP: YouTube answers "This
+  video is unavailable" for licensed music when the origin is an IP literal
+  (verified with Firefox and WebKitGTK; `localhost` passes). Go drives
   it through Wails events (`yt:cmd`), relayed to the frame as postMessage, and
   state comes back through the `YouTubeReport` binding.
   No audio is fetched or decoded by vibe-music.
