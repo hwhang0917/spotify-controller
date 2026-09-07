@@ -117,3 +117,16 @@ func TestPlayerCommandsAndStatus(t *testing.T) {
 	}
 	_ = source.Track{}
 }
+
+func TestKeyRestrictionError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(403)
+		w.Write([]byte(`{"error":{"code":403,"errors":[{"reason":"forbidden"}],"message":"Requests from referer <empty> are blocked."}}`))
+	}))
+	defer srv.Close()
+	s := New(Options{APIKey: "k", APIURL: srv.URL})
+	_, err := s.Search(context.Background(), "x", 1)
+	if err != ErrKeyRestricted || source.ErrorCode(err, "?") != "youtube_key_restricted" {
+		t.Fatalf("want ErrKeyRestricted, got %v", err)
+	}
+}

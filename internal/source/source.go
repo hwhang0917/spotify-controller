@@ -5,6 +5,7 @@ package source
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -61,4 +62,26 @@ type Source interface {
 // (local files) serve it through the guest API.
 type ArtworkProvider interface {
 	Artwork(ctx context.Context, trackID string) (data []byte, mime string, err error)
+}
+
+// Coder is implemented by errors that carry a stable code for the UIs to
+// translate. Unknown errors are shown verbatim.
+type Coder interface{ Code() string }
+
+// CodedError is a sentinel with a UI code.
+type CodedError struct {
+	Kind string // the code, e.g. "youtube_quota"
+	Msg  string
+}
+
+func (e *CodedError) Error() string { return e.Msg }
+func (e *CodedError) Code() string  { return e.Kind }
+
+// ErrorCode returns the code of err (or a wrapped error), else fallback.
+func ErrorCode(err error, fallback string) string {
+	var c Coder
+	if errors.As(err, &c) {
+		return c.Code()
+	}
+	return fallback
 }

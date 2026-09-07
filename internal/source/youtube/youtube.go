@@ -11,7 +11,6 @@ package youtube
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -35,11 +34,15 @@ const (
 	stateBuffering = 3
 )
 
-// Sentinel errors the admin UI translates.
+// Sentinel errors the UIs translate by code.
 var (
-	ErrNoAPIKey       = errors.New("youtube: API key is empty")
-	ErrQuotaExceeded  = errors.New("youtube: daily API quota exceeded")
-	ErrPlayerNotReady = errors.New("youtube: player not ready")
+	ErrNoAPIKey       = &source.CodedError{Kind: "youtube_api_key", Msg: "youtube: API key is empty"}
+	ErrQuotaExceeded  = &source.CodedError{Kind: "youtube_quota", Msg: "youtube: daily API quota exceeded"}
+	ErrPlayerNotReady = &source.CodedError{Kind: "youtube_player", Msg: "youtube: player not ready"}
+	// ErrKeyRestricted: the key has a website (HTTP referrer) or IP restriction
+	// that a server-side caller cannot satisfy.
+	ErrKeyRestricted = &source.CodedError{Kind: "youtube_key_restricted", Msg: "youtube: API key rejected because of its application restriction"}
+	ErrKeyInvalid    = &source.CodedError{Kind: "youtube_key_invalid", Msg: "youtube: API key invalid or the Data API is not enabled"}
 )
 
 // Command is what the embedded player is asked to do.
@@ -191,10 +194,20 @@ func (s *Source) get(ctx context.Context, path string, q url.Values, out any) er
 	if res.StatusCode != http.StatusOK {
 		var e apiError
 		_ = json.NewDecoder(res.Body).Decode(&e)
+		msg := strings.ToLower(e.Error.Message)
 		for _, r := range e.Error.Errors {
-			if r.Reason == "quotaExceeded" || r.Reason == "dailyLimitExceeded" {
+			switch r.Reason {
+			case "quotaExceeded", "dailyLimitExceeded":
 				return ErrQuotaExceeded
+			case "keyInvalid":
+				return ErrKeyInvalid
 			}
+		}
+		switch {
+		case strings.Contains(msg, "referer") || strings.Contains(msg, "referrer") || strings.Contains(msg, "ip address") || strings.Contains(msg, "api_key_http_referrer_blocked") || strings.Contains(msg, "api_key_ip_address_blocked"):
+			return ErrKeyRestricted
+		case strings.Contains(msg, "api key not valid") || strings.Contains(msg, "has not been used") || strings.Contains(msg, "is disabled"):
+			return ErrKeyInvalid
 		}
 		return fmt.Errorf("youtube: %d %s", res.StatusCode, e.Error.Message)
 	}

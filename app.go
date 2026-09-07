@@ -49,9 +49,6 @@ const (
 	errSpotifyNoID   = "spotify_client_id"
 	errSpotifyNoDev  = "spotify_no_device"
 	errSpotifyLogin  = "spotify_login_timeout"
-	errYouTubeKey    = "youtube_api_key"
-	errYouTubeQuota  = "youtube_quota"
-	errYouTubePlayer = "youtube_player"
 	errSourceOff     = "source_disabled"
 )
 
@@ -102,12 +99,9 @@ func uiError(err error) error {
 		return codeErr(errSpotifyLogin, "")
 	case errors.Is(err, local.ErrAudioOutput):
 		return codeErr(errAudioOutput, err.Error())
-	case errors.Is(err, youtube.ErrNoAPIKey):
-		return codeErr(errYouTubeKey, "")
-	case errors.Is(err, youtube.ErrQuotaExceeded):
-		return codeErr(errYouTubeQuota, "")
-	case errors.Is(err, youtube.ErrPlayerNotReady):
-		return codeErr(errYouTubePlayer, "")
+	}
+	if code := source.ErrorCode(err, ""); code != "" {
+		return codeErr(code, "")
 	}
 	return err
 }
@@ -396,7 +390,15 @@ func (a *App) SetSourceEnabled(id string, enabled bool) error {
 	a.mu.Lock()
 	a.cfg.SetDisabled(id, !enabled)
 	a.mu.Unlock()
-	return a.saveConfig()
+	if err := a.saveConfig(); err != nil {
+		return err
+	}
+	// Switching a source on while nothing plays makes it the active one, so
+	// guests are never left with "no active source" after a toggle.
+	if enabled && a.player.ActiveSource() == nil {
+		return a.SetActiveSource(id)
+	}
+	return nil
 }
 
 func (a *App) sourceByID(id string) (player.SourceInfo, bool) {

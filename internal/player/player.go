@@ -228,10 +228,13 @@ func (p *Player) Deactivate(ctx context.Context) {
 	p.broadcastIfChanged()
 }
 
+// ErrNoSource means the admin has not activated any source.
+var ErrNoSource = &source.CodedError{Kind: "no_source", Msg: "no active source"}
+
 func (p *Player) Search(ctx context.Context, q string, limit int) ([]source.Track, error) {
 	src := p.ActiveSource()
 	if src == nil {
-		return nil, errors.New("no active source")
+		return nil, ErrNoSource
 	}
 	return src.Search(ctx, q, limit)
 }
@@ -242,7 +245,7 @@ func (p *Player) Request(ctx context.Context, t source.Track, g Guest) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.active == nil {
-		return errors.New("no active source")
+		return ErrNoSource
 	}
 	p.queue = append(p.queue, &QueueItem{
 		ID:              newID(),

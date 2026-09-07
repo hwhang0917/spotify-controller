@@ -80,7 +80,9 @@ the 5-user limit is never an issue.
 ### YouTube Music
 
 1. In the Google Cloud console, enable **YouTube Data API v3** and create an
-   API key. Restrict it to that API.
+   API key. Under *API restrictions* allow only the YouTube Data API. Leave
+   *Application restrictions* at **None**: vibe-music calls the API from the
+   host PC, so a "Websites" (HTTP referrer) restriction rejects every request.
 2. Paste the key into the admin window's YouTube card and save. It is kept in
    its own `0600` file, not in the database.
 3. Switch the source to YouTube. The player appears in the admin's player card

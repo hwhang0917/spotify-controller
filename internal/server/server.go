@@ -52,6 +52,8 @@ const (
 	errNotInQueue   = "not_in_queue"
 	errNotOwner     = "not_owner"
 	errInviteNeeded = "invite_required"
+	errSearchFailed = "search_failed"
+	errNoSource     = "no_source"
 	errTrackNeeded  = "track_required"
 	errNoPlayer     = "player_not_running"
 )
@@ -276,7 +278,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	}
 	tracks, err := s.player.Search(r.Context(), q, searchLimit)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		writeError(w, http.StatusBadGateway, source.ErrorCode(err, errSearchFailed))
 		return
 	}
 	if tracks == nil {
@@ -310,7 +312,7 @@ func (s *Server) request(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.player.Request(r.Context(), t, guestFrom(r)); err != nil {
-		writeError(w, http.StatusConflict, err.Error())
+		writeError(w, http.StatusConflict, source.ErrorCode(err, errNoSource))
 		return
 	}
 	writeJSON(w, http.StatusOK, s.stateFor(guestFrom(r)))
