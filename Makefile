@@ -31,9 +31,11 @@ dev-web: ## Run the guest UI dev server (proxies /api to the running guest serve
 test: ## Run Go tests
 	go test ./...
 
-lint: ## gofmt check + go vet
+lint: ## gofmt check, go vet, and Vue type-check for both UIs
 	@test -z "$$(gofmt -l . | tee /dev/stderr)" || (echo "gofmt: files need formatting" && exit 1)
 	go vet ./...
+	npm --prefix frontend run typecheck
+	npm --prefix web run typecheck
 
 clean: ## Remove build output and built UIs
 	rm -rf $(BIN) frontend/dist/assets frontend/dist/index.html web/dist/assets web/dist/index.html
