@@ -52,7 +52,25 @@ case "$asset" in
       exit 1
     fi
     echo "Installed $dir/vibe-music"
-    case ":$PATH:" in *":$dir:"*) ;; *) echo "note: $dir is not on your PATH" ;; esac ;;
+    case ":$PATH:" in *":$dir:"*) ;; *) echo "note: $dir is not on your PATH" ;; esac
+    # Desktop entry so app launchers (GNOME, KDE, wlroots menus) can start it.
+    data="${XDG_DATA_HOME:-$HOME/.local/share}"
+    mkdir -p "$data/applications" "$data/vibe-music"
+    curl -fsSL -o "$data/vibe-music/icon.png" "https://raw.githubusercontent.com/$REPO/master/build/appicon.png" \
+      || echo "note: icon download failed; the launcher entry will have no icon" >&2
+    cat > "$data/applications/vibe-music.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=vibe-music
+Comment=Office jukebox with votes
+Exec="$dir/vibe-music"
+Icon=$data/vibe-music/icon.png
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+StartupWMClass=vibe-music
+DESKTOP
+    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$data/applications" 2>/dev/null
+    echo "Desktop entry: $data/applications/vibe-music.desktop" ;;
   *.zip)
     rm -rf "$dir/vibe-music.app"
     ditto -x -k "$tmp/$asset" "$dir"
