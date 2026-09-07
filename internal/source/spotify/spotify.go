@@ -28,6 +28,7 @@ import (
 
 const (
 	connectTimeout  = 3 * time.Minute
+	httpTimeout     = 15 * time.Second // a dead network must fail, not hang
 	callbackPath    = "/callback"
 	minArtworkPx    = 300
 	trackURIPrefix  = "spotify:track:"
@@ -105,12 +106,14 @@ func (s *Source) oauthConfig(redirect string) *oauth2.Config {
 
 func (s *Source) newClient(tok *oauth2.Token) *spotify.Client {
 	cfg := s.oauthConfig("")
+	// oauth2 builds its clients from the one in this context value
+	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{Timeout: httpTimeout})
 	ts := &savingTokenSource{
-		src:  oauth2.ReuseTokenSource(nil, cfg.TokenSource(context.Background(), tok)),
+		src:  oauth2.ReuseTokenSource(nil, cfg.TokenSource(ctx, tok)),
 		last: tok,
 		save: s.opts.SaveToken,
 	}
-	return spotify.New(oauth2.NewClient(context.Background(), ts))
+	return spotify.New(oauth2.NewClient(ctx, ts))
 }
 
 // Connected reports whether a token is present.

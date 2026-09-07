@@ -204,7 +204,8 @@ let poll: number | undefined
 let tick: number | undefined
 onMounted(async () => {
   await refresh().catch((e) => toast.error(tError(e)))
-  stops.push(EventsOn('state', (s: State) => { state.value = s }))
+  stops.push(EventsOn('state', (s: State) => { state.value = s; api.Sources().then((x) => { sources.value = x }).catch(() => {}) }))
+  stops.push(EventsOn('notice', (code: string) => { toast.warning(t(`notice.${code}`)) }))
   stops.push(EventsOn('guests', (g: GuestInfo[]) => { guests.value = g ?? []; api.Invitations().then((i) => { invitations.value = i ?? [] }).catch(() => {}) }))
   window.addEventListener('keydown', onKey)
   tick = window.setInterval(() => { now.value = Date.now() }, 500)

@@ -35,7 +35,37 @@ const (
 	stateEvent   = "state"
 	guestsEvent  = "guests"
 	youtubeEvent = "yt:cmd" // commands for the embedded YouTube player
+	noticeEvent  = "notice" // one-off warnings for the admin (toast), by code
 )
+
+// Sources that need the internet. Offline, startup leaves them off.
+var onlineSources = map[string]bool{"spotify": true, "youtube": true}
+
+// netProbeTimeout bounds the connectivity check at startup.
+const netProbeTimeout = 3 * time.Second
+
+// online reports whether either provider host answers a TCP dial. Corporate
+// networks may block one; both blocked is treated as offline.
+// ponytail: a dial, not an HTTP call; good enough to decide what to enable.
+func online() bool {
+	hosts := []string{"accounts.spotify.com:443", "www.googleapis.com:443"}
+	ok := make(chan bool, len(hosts))
+	for _, h := range hosts {
+		go func(h string) {
+			c, err := net.DialTimeout("tcp", h, netProbeTimeout)
+			if err == nil {
+				c.Close()
+			}
+			ok <- err == nil
+		}(h)
+	}
+	for range hosts {
+		if <-ok {
+			return true
+		}
+	}
+	return false
+}
 
 // UI error codes. The admin UI translates "code: detail"; unknown text is
 // shown as-is. Keep in sync with frontend/src/i18n.ts err.* keys.
@@ -197,10 +227,33 @@ func (a *App) startup(ctx context.Context) {
 	go a.player.Run(runCtx)
 	go a.forwardState(runCtx)
 
-	for _, id := range cfg.Enabled {
-		if err := a.player.SetEnabled(runCtx, id, true); err != nil {
-			log.Println("enable", id+":", err) // stays enabled in config; shows as not ready
+	// Enabling can touch the network (Spotify verifies devices). Never do that
+	// before the window is up: Wails shows it only after startup returns.
+	go a.enableConfigured(runCtx, cfg.Enabled)
+}
+
+// enableConfigured switches on the sources saved in config. Offline, the
+// online-only ones stay off (still wanted in config) and the admin is warned.
+func (a *App) enableConfigured(ctx context.Context, ids []string) {
+	isOnline := true
+	for _, id := range ids {
+		if onlineSources[id] {
+			isOnline = online()
+			break
 		}
+	}
+	skipped := false
+	for _, id := range ids {
+		if onlineSources[id] && !isOnline {
+			skipped = true
+			continue
+		}
+		if err := a.player.SetEnabled(ctx, id, true); err != nil {
+			log.Println("enable", id+":", err) // stays wanted in config; shows as not started
+		}
+	}
+	if skipped {
+		runtime.EventsEmit(a.ctx, noticeEvent, "offline_sources_off")
 	}
 }
 
