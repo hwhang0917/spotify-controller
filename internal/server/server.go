@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -33,50 +32,30 @@ const (
 	requestBodyKB = 4
 )
 
-// Guests tracks who is here: cookie ID -> display name, and who is subscribed to SSE.
-// ponytail: in-memory; RBAC/invites replace this later.
-type Guests struct {
-	mu    sync.Mutex
-	names map[string]string
-	subs  map[string]int // guestID -> open SSE connections
-}
-
-func newGuests() *Guests {
-	return &Guests{names: map[string]string{}, subs: map[string]int{}}
-}
-
-func (g *Guests) name(id string) string {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.names[id]
-}
-
-func (g *Guests) setName(id, name string) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.names[id] = name
-}
-
-// subscribe returns the number of distinct guests connected after the change.
-func (g *Guests) subscribe(id string, delta int) int {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.subs[id] += delta
-	if g.subs[id] <= 0 {
-		delete(g.subs, id)
-	}
-	return len(g.subs)
-}
-
 type Server struct {
 	player *player.Player
 	guests *Guests
 }
 
+// Error codes the guest UI translates.
+const (
+	errNameRequired = "name_required"
+	errNameInvalid  = "name_invalid"
+	errBlocked      = "blocked"
+	errNotInQueue   = "not_in_queue"
+	errTrackNeeded  = "track_required"
+	errNoPlayer     = "player_not_running"
+)
+
 // NewHandler wires the API and serves dist (a built Vite app) as an SPA:
 // unknown paths fall back to index.html so client-side routing works.
-func NewHandler(dist fs.FS, p *player.Player) http.Handler {
-	s := &Server{player: p, guests: newGuests()}
+// guests may be nil for a standalone handler; the app passes its own so the
+// admin window can manage them.
+func NewHandler(dist fs.FS, p *player.Player, guests *Guests) http.Handler {
+	if guests == nil {
+		guests = NewGuests(nil, nil)
+	}
+	s := &Server{player: p, guests: guests}
 	r := chi.NewRouter()
 	r.Use(middleware.Logger, middleware.Recoverer)
 
@@ -123,7 +102,11 @@ func (s *Server) guest(next http.Handler) http.Handler {
 				HttpOnly: true, SameSite: http.SameSiteLaxMode,
 			})
 		}
-		g := player.Guest{ID: id, Name: s.guests.name(id)}
+		if s.guests.isBlocked(id) {
+			writeError(w, http.StatusForbidden, errBlocked)
+			return
+		}
+		g := player.Guest{ID: id, Name: s.guests.seen(id)}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), guestKey, g)))
 	})
 }
@@ -136,7 +119,7 @@ func guestFrom(r *http.Request) player.Guest {
 func (s *Server) requireName(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if guestFrom(r).Name == "" {
-			writeError(w, http.StatusBadRequest, "set a display name first")
+			writeError(w, http.StatusBadRequest, errNameRequired)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -145,7 +128,7 @@ func (s *Server) requireName(next http.Handler) http.Handler {
 
 func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	if s.player == nil {
-		writeError(w, http.StatusServiceUnavailable, "player not running")
+		writeError(w, http.StatusServiceUnavailable, errNoPlayer)
 		return
 	}
 	writeJSON(w, http.StatusOK, s.player.State())
@@ -154,7 +137,7 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 // events streams player state as SSE `state` events, with a comment ping for keepalive.
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	if s.player == nil {
-		writeError(w, http.StatusServiceUnavailable, "player not running")
+		writeError(w, http.StatusServiceUnavailable, errNoPlayer)
 		return
 	}
 	flusher, ok := w.(http.Flusher)
@@ -163,8 +146,9 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	g := guestFrom(r)
-	s.player.SetConnectedGuests(s.guests.subscribe(g.ID, +1))
-	defer func() { s.player.SetConnectedGuests(s.guests.subscribe(g.ID, -1)) }()
+	kill, n := s.guests.connect(g.ID)
+	s.player.SetConnectedGuests(n)
+	defer func() { s.player.SetConnectedGuests(s.guests.disconnect(g.ID, kill)) }()
 
 	ch, cancel := s.player.Subscribe()
 	defer cancel()
@@ -180,6 +164,8 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-r.Context().Done():
+			return
+		case <-kill:
 			return
 		case <-ping.C:
 			fmt.Fprint(w, ": ping\n\n")
@@ -202,12 +188,12 @@ func (s *Server) setMe(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if err := decode(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, errNameInvalid)
 		return
 	}
 	name := strings.TrimSpace(body.Name)
 	if name == "" || len([]rune(name)) > maxNameLen {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("name must be 1-%d characters", maxNameLen))
+		writeError(w, http.StatusBadRequest, errNameInvalid)
 		return
 	}
 	g := guestFrom(r)
@@ -235,7 +221,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 func (s *Server) request(w http.ResponseWriter, r *http.Request) {
 	var t source.Track
 	if err := decode(r, &t); err != nil || t.ID == "" {
-		writeError(w, http.StatusBadRequest, "track required")
+		writeError(w, http.StatusBadRequest, errTrackNeeded)
 		return
 	}
 	if err := s.player.Request(r.Context(), t, guestFrom(r)); err != nil {
@@ -247,7 +233,7 @@ func (s *Server) request(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) vote(w http.ResponseWriter, r *http.Request) {
 	if err := s.player.Vote(chi.URLParam(r, "id"), guestFrom(r).ID); err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, errNotInQueue)
 		return
 	}
 	writeJSON(w, http.StatusOK, s.player.State())

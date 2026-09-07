@@ -208,3 +208,21 @@ type named struct {
 }
 
 func (n *named) ID() string { return n.id }
+
+func TestRemoveGuestDropsRequestsAndVotes(t *testing.T) {
+	p, _ := setup(t)
+	ctx := context.Background()
+	_ = p.Request(ctx, a, g1) // playing
+	_ = p.Request(ctx, b, g2)
+	_ = p.Request(ctx, c, g1)
+	_ = p.Vote(p.State().Queue[0].ID, g1.ID) // g1 upvotes b
+	p.SetConnectedGuests(4)
+	p.VoteSkip(ctx, g1.ID)
+
+	p.RemoveGuest(g1.ID)
+	s := p.State()
+	eq(t, queueIDs(s), []string{"b"})
+	if s.Queue[0].Votes != 1 || s.SkipVotes != 0 {
+		t.Fatalf("votes=%d skip=%d", s.Queue[0].Votes, s.SkipVotes)
+	}
+}

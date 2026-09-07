@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/hwhang0917/vibe-music/internal/player"
 	"github.com/hwhang0917/vibe-music/internal/source"
@@ -30,7 +31,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *fake.Source) {
 	if err := p.SetSource(context.Background(), "fake"); err != nil {
 		t.Fatal(err)
 	}
-	ts := httptest.NewServer(NewHandler(dist, p))
+	ts := httptest.NewServer(NewHandler(dist, p, nil))
 	t.Cleanup(ts.Close)
 	return ts, f
 }
@@ -43,8 +44,6 @@ type client struct {
 }
 
 func newClient(t *testing.T, base string) *client {
-	jar, _ := (&http.Client{}).Jar, error(nil)
-	_ = jar
 	c := &http.Client{}
 	c.Jar = newJar()
 	return &client{t: t, base: base, http: c}
@@ -77,7 +76,7 @@ func TestStaticAndSPA(t *testing.T) {
 		t.Fatalf("static: %d", res.StatusCode)
 	}
 	rec := httptest.NewRecorder()
-	NewHandler(fstest.MapFS{}, nil).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	NewHandler(fstest.MapFS{}, nil, nil).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("unbuilt UI: %d", rec.Code)
 	}
@@ -212,4 +211,72 @@ func TestEventsCountsDistinctGuests(t *testing.T) {
 	if st["guests"].(float64) != 2 {
 		t.Fatalf("guests = %v, want 2", st["guests"])
 	}
+}
+
+func TestBlockAndKick(t *testing.T) {
+	changes := 0
+	guests := NewGuests(nil, func() { changes++ })
+	f := fake.New(source.Track{ID: "a", Title: "Alpha"})
+	p := player.New(player.Options{Sources: []source.Source{f}})
+	p.SetSource(context.Background(), "fake")
+	ts := httptest.NewServer(NewHandler(dist, p, guests))
+	defer ts.Close()
+
+	kim := newClient(t, ts.URL)
+	_, me := kim.do("POST", "/api/me", `{"name":"Kim"}`)
+	id := me["id"].(string)
+	if list := guests.List(); len(list) != 1 || list[0].Name != "Kim" || list[0].ID != id {
+		t.Fatalf("list: %+v", list)
+	}
+
+	// open a stream, then kick: the stream ends
+	req, _ := http.NewRequest("GET", ts.URL+"/api/events", nil)
+	res, err := kim.http.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	waitFor(t, func() bool { return guests.Connected() == 1 })
+	guests.Kick(id)
+	buf := make([]byte, 4096)
+	for {
+		if _, err := res.Body.Read(buf); err != nil {
+			break // EOF: server closed the stream
+		}
+	}
+	waitFor(t, func() bool { return guests.Connected() == 0 })
+
+	// block: every API call is 403 with a code the UI understands
+	guests.SetBlocked(id, true)
+	r, out := kim.do("POST", "/api/queue", `{"id":"a"}`)
+	if r.StatusCode != 403 || out["error"] != "blocked" {
+		t.Fatalf("blocked: %d %v", r.StatusCode, out)
+	}
+	if b := guests.Blocked(); len(b) != 1 || b[0] != id {
+		t.Fatalf("blocked list: %v", b)
+	}
+	guests.SetBlocked(id, false)
+	if r, _ := kim.do("GET", "/api/me", ""); r.StatusCode != 200 {
+		t.Fatalf("unblocked: %d", r.StatusCode)
+	}
+
+	// remove: name is forgotten
+	guests.Remove(id)
+	if _, me := kim.do("GET", "/api/me", ""); me["name"] != "" {
+		t.Fatalf("name should be forgotten: %v", me)
+	}
+	if changes == 0 {
+		t.Fatal("onChange never fired")
+	}
+}
+
+func waitFor(t *testing.T, cond func() bool) {
+	t.Helper()
+	for i := 0; i < 100; i++ {
+		if cond() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("condition not met")
 }

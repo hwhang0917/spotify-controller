@@ -296,6 +296,24 @@ func (p *Player) control(fn func(source.Source) error) error {
 	return err
 }
 
+// RemoveGuest drops everything a guest contributed: their queued requests,
+// their upvotes, and their skip vote. Used when the admin removes or blocks them.
+func (p *Player) RemoveGuest(guestID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	kept := p.queue[:0]
+	for _, it := range p.queue {
+		delete(it.votes, guestID)
+		if it.RequestedBy != guestID {
+			kept = append(kept, it)
+		}
+	}
+	p.queue = kept
+	delete(p.skipVotes, guestID)
+	p.sortQueue()
+	p.broadcastIfChanged()
+}
+
 // SetSkipRatio changes the fraction of connected guests needed to skip.
 func (p *Player) SetSkipRatio(r float64) {
 	p.mu.Lock()

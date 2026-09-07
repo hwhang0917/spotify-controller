@@ -25,8 +25,11 @@ import (
 // shutdownTimeout bounds how long StopServer waits for in-flight requests.
 const shutdownTimeout = 5 * time.Second
 
-// stateEvent is the Wails event name the admin UI listens on.
-const stateEvent = "state"
+// Wails event names the admin UI listens on.
+const (
+	stateEvent  = "state"
+	guestsEvent = "guests"
+)
 
 // App is the Wails-bound backend for the admin window.
 type App struct {
@@ -37,6 +40,7 @@ type App struct {
 	srv     *http.Server
 	url     string
 	player  *player.Player
+	guests  *server.Guests
 	local   *local.Source
 	spotify *spotify.Source
 	cancel  context.CancelFunc
@@ -79,6 +83,9 @@ func (a *App) startup(ctx context.Context) {
 	a.player = player.New(player.Options{
 		Sources:   []source.Source{a.local, a.spotify},
 		SkipRatio: cfg.SkipRatio,
+	})
+	a.guests = server.NewGuests(cfg.Blocked, func() {
+		runtime.EventsEmit(a.ctx, guestsEvent, a.guests.List())
 	})
 
 	runCtx, cancel := context.WithCancel(context.Background())
@@ -196,6 +203,33 @@ func (a *App) SpotifyDisconnect() { a.spotify.Disconnect() }
 
 func (a *App) SpotifyDevices() ([]spotify.Device, error) { return a.spotify.Devices(a.ctx) }
 
+// --- guests ---
+
+func (a *App) Guests() []server.GuestInfo { return a.guests.List() }
+
+// KickGuest drops the guest's live connections; they can reconnect.
+func (a *App) KickGuest(id string) { a.guests.Kick(id) }
+
+// RemoveGuest forgets the guest and everything they queued or voted for.
+func (a *App) RemoveGuest(id string) {
+	a.guests.Remove(id)
+	a.player.RemoveGuest(id)
+}
+
+// BlockGuest toggles the block list and persists it. Blocking also removes
+// the guest's requests and votes.
+func (a *App) BlockGuest(id string, blocked bool) error {
+	a.guests.SetBlocked(id, blocked)
+	if blocked {
+		a.player.RemoveGuest(id)
+	}
+	a.mu.Lock()
+	a.cfg.Blocked = a.guests.Blocked()
+	cfg := a.cfg
+	a.mu.Unlock()
+	return config.Save(cfg)
+}
+
 // --- playback (admin override) ---
 
 func (a *App) GetState() player.State  { return a.player.State() }
@@ -220,7 +254,7 @@ func (a *App) StartServer(port int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	srv := &http.Server{Handler: server.NewHandler(web.Dist, a.player)}
+	srv := &http.Server{Handler: server.NewHandler(web.Dist, a.player, a.guests)}
 	go func() {
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Println("guest server:", err)

@@ -28,6 +28,8 @@ type Config struct {
 	SkipRatio    float64 `json:"skipRatio"`
 	Local        Local   `json:"local"`
 	Spotify      Spotify `json:"spotify"`
+	// Blocked guest IDs (cookie IDs). Managed from the admin window.
+	Blocked []string `json:"blocked,omitempty"`
 }
 
 type Local struct {
