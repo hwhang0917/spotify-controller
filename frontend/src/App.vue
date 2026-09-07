@@ -144,6 +144,10 @@ const kick = (id: string) => run('kick', async () => { await api.KickGuest(id); 
 const removeGuest = (id: string) => run('remove', async () => { await api.RemoveGuest(id); return t('toast.guestRemoved') })
 const redirectUri = computed(() => `http://127.0.0.1:${cfg.value?.spotify.callbackPort ?? 27272}/callback`)
 const youtubeKey = ref('')
+const testYouTubeKey = () => run('yt-test', async () => {
+  const out = await api.YouTubeTest(locale.value === 'ko' ? 'KR' : 'US')
+  return t('toast.youtubeTestOk', { out })
+})
 const saveYouTubeKey = () => run('yt-key', async () => {
   await api.SetYouTubeAPIKey(youtubeKey.value)
   youtubeKey.value = ''
@@ -227,6 +231,7 @@ onMounted(async () => {
   await refresh().catch((e) => toast.error(tError(e)))
   stops.push(EventsOn('state', (s: State) => { state.value = s; api.Sources().then((x) => { sources.value = x }).catch(() => {}) }))
   stops.push(EventsOn('notice', (code: string) => { toast.warning(t(`notice.${code}`)) }))
+  stops.push(EventsOn('source-error', (msg: string) => { toast.error(t('notice.sourceError', { msg })) }))
   stops.push(EventsOn('guests', (g: GuestInfo[]) => { guests.value = g ?? []; api.Invitations().then((i) => { invitations.value = i ?? [] }).catch(() => {}) }))
   window.addEventListener('keydown', onKey)
   tick = window.setInterval(() => { now.value = Date.now() }, 500)
@@ -586,6 +591,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                   <div class="flex gap-2">
                     <Input id="ytKey" v-model="youtubeKey" type="password" class="font-mono text-xs" :placeholder="cfg.youtube.hasKey ? '••••••••' : 'AIza…'" />
                     <Button :disabled="!!busy || !youtubeKey.trim()" @click="saveYouTubeKey">{{ t('youtube.save') }}</Button>
+                    <Button v-if="cfg.youtube.hasKey" variant="outline" :disabled="!!busy" @click="testYouTubeKey">{{ busy === 'yt-test' ? t('youtube.testing') : t('youtube.test') }}</Button>
                     <Button v-if="cfg.youtube.hasKey" variant="ghost" class="text-destructive" :disabled="!!busy" @click="askClearYouTubeKey"><Trash2 />{{ t('youtube.clear') }}</Button>
                   </div>
                   <p v-if="cfg.youtube.hasKey" class="text-xs text-muted-foreground"><Check class="mr-1 inline size-3" />{{ t('youtube.apiKeySet') }}</p>

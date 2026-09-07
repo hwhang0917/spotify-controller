@@ -294,6 +294,23 @@ func (s *Source) remember(vr videosResponse) []source.Track {
 	return out
 }
 
+// Test exercises the key the way the app uses it: one search and one chart
+// call. It returns a short human summary, or the first failure verbatim.
+func (s *Source) Test(ctx context.Context, region string) (string, error) {
+	tracks, err := s.Search(ctx, "music", 1)
+	if err != nil {
+		return "", fmt.Errorf("search: %w", err)
+	}
+	s.mu.Lock()
+	delete(s.charts, strings.ToUpper(strings.TrimSpace(region))) // force a live call
+	s.mu.Unlock()
+	chart, err := s.Chart(ctx, region, 1)
+	if err != nil {
+		return "", fmt.Errorf("chart: %w", err)
+	}
+	return fmt.Sprintf("search ok (%d), chart ok (%d)", len(tracks), len(chart)), nil
+}
+
 // Chart returns the most popular music videos in a region (videos.list with
 // chart=mostPopular, 1 quota unit), cached per region for chartTTL.
 func (s *Source) Chart(ctx context.Context, region string, limit int) ([]source.Track, error) {

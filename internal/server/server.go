@@ -38,9 +38,10 @@ const (
 type TopFunc func(sourceID string, limit int) ([]source.Track, error)
 
 type Server struct {
-	player *player.Player
-	guests *Guests
-	top    TopFunc
+	player  *player.Player
+	guests  *Guests
+	top     TopFunc
+	onError func(error) // optional: the app shows source failures in the admin window
 }
 
 const (
@@ -71,13 +72,13 @@ const (
 
 // NewHandler wires the API and serves dist (a built Vite app) as an SPA:
 // unknown paths fall back to index.html so client-side routing works.
-func NewHandler(dist fs.FS, p *player.Player, guests *Guests, top TopFunc) http.Handler {
+func NewHandler(dist fs.FS, p *player.Player, guests *Guests, top TopFunc, onError func(error)) http.Handler {
 	if guests == nil {
 		panic(errNoStore)
 	}
-	s := &Server{player: p, guests: guests, top: top}
+	s := &Server{player: p, guests: guests, top: top, onError: onError}
 	r := chi.NewRouter()
-	r.Use(middleware.Logger, middleware.Recoverer, noRobots)
+	r.Use(middleware.Logger, middleware.Recoverer, noRobots, noStore)
 
 	r.Get(joinPath, s.join)
 
@@ -283,7 +284,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	}
 	tracks, err := s.player.Search(r.Context(), r.URL.Query().Get("source"), q, searchLimit)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, sourceErr(err))
+		writeError(w, http.StatusBadGateway, s.sourceErr(err))
 		return
 	}
 	if tracks == nil {
@@ -321,7 +322,7 @@ func (s *Server) chart(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	tracks, err := s.player.Chart(r.Context(), q.Get("source"), q.Get("region"), chartLimit)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, sourceErr(err))
+		writeError(w, http.StatusBadGateway, s.sourceErr(err))
 		return
 	}
 	if tracks == nil {
@@ -389,12 +390,26 @@ func (s *Server) artwork(w http.ResponseWriter, r *http.Request) {
 // sourceErr turns a source failure into what the guest UI shows: a known
 // code, or "search_failed: <provider message>" so nothing is hidden. Either
 // way the host log gets the full error.
-func sourceErr(err error) string {
+func (s *Server) sourceErr(err error) string {
 	log.Println("source:", err)
+	if s.onError != nil {
+		s.onError(err)
+	}
 	if code := source.ErrorCode(err, ""); code != "" {
 		return code
 	}
 	return errSearchFailed + ": " + err.Error()
+}
+
+// noStore keeps phones from running a stale build: the API and the SPA shell
+// are never cached. Hashed assets under /assets/ stay cacheable.
+func noStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/assets/") {
+			w.Header().Set("Cache-Control", "no-store")
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // noRobots marks every response as not for indexing; this is a private LAN page.

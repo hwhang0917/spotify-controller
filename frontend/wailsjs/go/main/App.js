@@ -36,3 +36,4 @@ export function SpotifyCancelConnect() { return app()['SpotifyCancelConnect']();
 export function SpotifyRedirectURI() { return app()['SpotifyRedirectURI'](); }
 export function SpotifyReset() { return app()['SpotifyReset'](); }
 export function ResetPlayHistory() { return app()['ResetPlayHistory'](); }
+export function YouTubeTest(arg1) { return app()['YouTubeTest'](arg1); }

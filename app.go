@@ -32,10 +32,11 @@ const shutdownTimeout = 5 * time.Second
 
 // Wails event names the admin UI listens on.
 const (
-	stateEvent   = "state"
-	guestsEvent  = "guests"
-	youtubeEvent = "yt:cmd" // commands for the embedded YouTube player
-	noticeEvent  = "notice" // one-off warnings for the admin (toast), by code
+	stateEvent       = "state"
+	guestsEvent      = "guests"
+	youtubeEvent     = "yt:cmd"       // commands for the embedded YouTube player
+	noticeEvent      = "notice"       // one-off warnings for the admin (toast), by code
+	sourceErrorEvent = "source-error" // a guest-facing source failure, verbatim
 )
 
 // Sources that need the internet. Offline, startup leaves them off.
@@ -561,6 +562,12 @@ func (a *App) SetYouTubeAPIKey(key string) error {
 	return nil
 }
 
+// YouTubeTest checks the saved key with a real search and chart call.
+func (a *App) YouTubeTest(region string) (string, error) {
+	out, err := a.youtube.Test(a.ctx, region)
+	return out, uiError(err)
+}
+
 // YouTubeReport receives the embedded player's state from the admin page.
 func (a *App) YouTubeReport(r youtube.Report) { a.youtube.Report(r) }
 
@@ -591,7 +598,9 @@ func (a *App) StartServer(port int) (string, error) {
 	if err != nil {
 		return "", uiError(err)
 	}
-	srv := &http.Server{Handler: server.NewHandler(web.Dist, a.player, a.guests, a.topTracks)}
+	srv := &http.Server{Handler: server.NewHandler(web.Dist, a.player, a.guests, a.topTracks, func(err error) {
+		runtime.EventsEmit(a.ctx, sourceErrorEvent, err.Error())
+	})}
 	go func() {
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Println("guest server:", err)

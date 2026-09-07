@@ -35,3 +35,4 @@ export function SpotifyCancelConnect(): Promise<void>;
 export function SpotifyRedirectURI(): Promise<string>;
 export function SpotifyReset(): Promise<void>;
 export function ResetPlayHistory(): Promise<void>;
+export function YouTubeTest(arg1: string): Promise<string>;

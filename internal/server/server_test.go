@@ -51,7 +51,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *fake.Source, *Guests) {
 		}
 		return []source.Track{{ID: "a", Title: "Alpha"}}, nil
 	}
-	ts := httptest.NewServer(NewHandler(dist, p, guests, top))
+	ts := httptest.NewServer(NewHandler(dist, p, guests, top, nil))
 	t.Cleanup(ts.Close)
 	return ts, f, guests
 }
@@ -96,7 +96,7 @@ func TestStaticAndSPA(t *testing.T) {
 		t.Fatalf("static: %d", res.StatusCode)
 	}
 	rec := httptest.NewRecorder()
-	NewHandler(fstest.MapFS{}, nil, guests, nil).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	NewHandler(fstest.MapFS{}, nil, guests, nil, nil).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("unbuilt UI: %d", rec.Code)
 	}
@@ -281,7 +281,7 @@ func TestBlockAndKick(t *testing.T) {
 	f := fake.New(source.Track{ID: "a", Title: "Alpha"})
 	p := player.New(player.Options{Sources: []source.Source{f}})
 	p.SetEnabled(context.Background(), "fake", true)
-	ts := httptest.NewServer(NewHandler(dist, p, guests, nil))
+	ts := httptest.NewServer(NewHandler(dist, p, guests, nil, nil))
 	defer ts.Close()
 
 	kim := newClient(t, ts.URL)
