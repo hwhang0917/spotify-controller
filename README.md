@@ -1,226 +1,117 @@
 # vibe-music
 
-Office jukebox with votes. One host PC plays the music; everyone on the same
-network opens a web page to see what's playing, request songs, upvote the
-queue, and vote to skip. Music sources are plugins: **Local files**,
-**Spotify**, and **YouTube Music**. The host's credentials never leave the
-host process.
+Office jukebox with votes. One PC plays the music; everyone on the same Wi-Fi
+opens a web page to see what's playing, request songs, upvote the playlist,
+and vote to skip. Music can come from **local files**, **Spotify**, or
+**YouTube Music**. Your accounts and keys stay on the host PC.
 
-## How it works
+Screens: a small admin window on the host, and a phone-friendly guest page.
 
-```
-                 ┌──────────────────────────────┐
- guests ─votes──▶│  vibe-music (one Go binary)  │
- (browser)       │  admin window   : Wails      │
-                 │  guest API + UI : Chi + SSE  │
-                 │  core           : queue,     │
-                 │                   votes, poll│
-                 │  sources        : local │ spotify
-                 └──────────┬──────────┬────────┘
-                            ▼          ▼
-                      speaker      Spotify desktop
-                    (beep/oto)     client (Web API)
-```
+## Get it
 
-- **Core owns the queue.** Sorted by votes, then request time. The same song
-  can be requested more than once. Skip happens when a configurable share of
-  connected guests votes (default 50%). The admin can always skip.
-- **Local files and YouTube mix; Spotify plays alone.** Each source has a Use
-  switch in the admin. With Local and YouTube on, guests pick a source per
-  search and the queue mixes them, the player switching source track by
-  track. Spotify's developer policy forbids mixing its content with other
-  audio, so turning Spotify on turns the others off (and vice versa), after a
-  confirmation whenever songs would be dropped.
-- **Spotify is a remote control.** Playback happens in the Spotify desktop
-  client on the host. vibe-music only sends Web API player commands, so it is a
-  non-streaming app. Guests never hold a token; the server searches and queues
-  on their behalf.
-- **YouTube is the official embedded player.** Search goes through the YouTube
-  Data API v3 with the host's own key; playback runs in YouTube's IFrame player
-  inside the admin window, which Go drives through Wails events. No audio is
-  fetched or decoded by vibe-music, so it stays within YouTube's terms.
-- **Guests are a cookie plus a display name.** Enough for one vote per person
-  and "requested by Kim". The admin can disconnect, remove, or block anyone.
-- **Invitation-only mode.** Flip the switch and newcomers need a link like
-  `http://<host>:5555/join?invitationCode=K7PM-3QXD`. Each link works
-  once (the person who used it can reopen it), has a TTL, and can be revoked. Everyone already in the room stays in when you turn it on.
-- **Everything survives a relaunch.** Settings, guests, blocks, invitations and
-  the queue live in a SQLite file (pure Go driver, no CGO).
+Download `vibe-music.exe` from the latest build (Releases, or the artifact on
+any green CI run) and run it. No installer, nothing else to install.
 
-## Requirements
+Building it yourself, or hacking on it: see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-- Go 1.25+, Node.js 20+
-- [Wails v2 CLI](https://wails.io/docs/gettingstarted/installation):
-  `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
-- **Windows / macOS:** no C toolchain needed (`CGO_ENABLED=0` builds work).
-- **Linux:** Wails needs WebKitGTK and the local player needs ALSA headers
-  (`libasound2-dev`), both via cgo. See `wails doctor`.
-- For Spotify: a Premium account on the host, the Spotify desktop app open on
-  the host PC, and your own app registered at the
-  [Spotify dashboard](https://developer.spotify.com/dashboard).
+## Quick start (host)
 
-## Setup
+1. Launch vibe-music. Pick a music source under **Sources** (see below) and
+   switch its **Use** toggle on.
+2. Press **Start** at the top right. The window shows the join address, e.g.
+   `http://192.168.0.12:5555`. Copy it or read it out.
+3. Guests open the address on their phone, type a name, and start requesting.
+
+Windows may ask to allow vibe-music through the firewall the first time; say
+yes for private networks, or guests cannot reach it.
+
+## Music sources
+
+You can run local files and YouTube together. Spotify plays alone: its rules
+forbid mixing its music with other audio, so switching Spotify on switches the
+others off (the app asks first if songs would be dropped).
 
 ### Local files
 
-In the admin window, add one or more folders; adding or removing one rescans
-right away, with a progress bar while it runs. MP3, WAV, FLAC and OGG Vorbis
-are indexed: title, artist, album, genre, year, duration and whether there is
-embedded artwork (all searchable except artwork). Each file is read once and
-the result is cached in the database by path, size and mtime, so later scans
-and launches only open new or changed files. An MP3's duration needs a pass
-over the whole file, which is why the first scan of a big library takes a
-while and later ones do not. Output goes to the OS default audio device.
+Add one or more folders. MP3, WAV, FLAC and OGG are indexed with title,
+artist, album, genre, year and length. The first scan of a large library takes
+a while (each MP3 has to be read once); after that only new or changed files
+are opened. Music plays through the PC's default speakers.
 
 ### Spotify
 
-1. Create an app at the Spotify dashboard. Redirect URI:
-   `http://127.0.0.1:27272/callback` (the admin window shows the exact value;
-   the port is configurable there). Spotify rejects `localhost` and rejects a
-   loopback URI without a port.
-2. Paste the Client ID into the admin window and press **Connect**. A browser
-   opens for consent; the token is stored in your user config directory with
-   `0600` permissions and refreshed automatically.
-3. Open the Spotify desktop app on the host and press play once so it shows up
-   as a device. Pick it under **Devices** or leave "whatever is active".
+You need a **Spotify Premium** account and a free developer app of your own.
+The **(?)** button on the Spotify card walks you through it: create an app at
+the Spotify dashboard, add the redirect address the card shows, paste the
+Client ID, press **Connect**, approve in the browser. Then open the Spotify
+desktop app on this PC and press play once so it shows up as a device.
 
-Your dashboard app stays in development mode; only the host authenticates, so
-the 5-user limit is never an issue.
+If the "Web API" checkbox in the dashboard is greyed out, the account you are
+logged in with is not Premium.
 
 ### YouTube Music
 
-1. In the Google Cloud console, enable **YouTube Data API v3** and create an
-   API key. Under *API restrictions* allow only the YouTube Data API. Leave
-   *Application restrictions* at **None**: vibe-music calls the API from the
-   host PC, so a "Websites" (HTTP referrer) restriction rejects every request.
-2. Paste the key into the admin window's YouTube card and save. It is kept in
-   its own `0600` file, not in the database.
-3. Switch the source to YouTube. The player appears in the admin's player card
-   and must stay visible while YouTube is active; that is a YouTube embed rule.
-   If the browser engine refuses autoplay after a relaunch, click the player
-   once.
+You need a free Google API key. The **(?)** button on the YouTube card walks
+you through it: enable *YouTube Data API v3* in the Google Cloud console,
+create an API key with **no application restriction** (the app calls Google
+from this PC, not from a website), paste it, press **Save key**, then **Test
+key**. Playback happens in the small YouTube player inside the admin window,
+which has to stay visible while a YouTube song plays.
 
-Quota: a search costs 100 units of the default 10,000 per day, so roughly 100
-guest searches a day. An artist (channel) page is also one search, cached for
-30 minutes per channel. The guest page debounces typing to make that last.
-Search is limited to YouTube's Music category.
+Google gives 10,000 free units a day. A guest search costs 100, so plan on
+about 100 searches a day; the guide explains how to ask for more.
 
-## Run
+## What guests can do
 
-Start the guest server from the admin window and share the URL it shows.
-Guests type a name, then see what is playing, the playlist, and a **Request a
-song** button that opens `/search`: a search bar with one chip per source,
-and, while the box is empty, the source's Top chart (YouTube), the most-played
-songs on this host, and the guest's favorites (hearts, kept in the browser
-only). Artists and albums in results are links to artist and album pages for
-every source. Requesting a song that is playing or already queued asks first.
-Off the home page, a foldable bar at the bottom shows what is playing.
+- See what is playing, who requested it, and the playlist with vote counts.
+- **Request a song**: search one source at a time, or browse the YouTube Top
+  50, the most-played songs on this host, or their own favorites (hearts, kept
+  on their phone only).
+- Tap an artist or album to see more from it.
+- Upvote songs in the playlist, remove their own requests, and vote to skip.
+  A skip happens when half the connected guests vote (the host can change the
+  share, and can always skip).
+- Requesting a song that is already playing or queued asks first.
 
-Data lives in `$XDG_CONFIG_HOME/vibe-music/` (Linux),
-`~/Library/Application Support/vibe-music/` (macOS), or `%AppData%\vibe-music\`
-(Windows). Override the directory with `VIBE_MUSIC_DIR`. It holds
-`vibe-music.db` (settings, guests, invitations, queue), `vibe-music.log`
-(JSON lines from the app and every guest request; one previous file is kept
-once it passes 5 MB) and, once connected, `spotify-token.json` and `youtube-api-key` (sealed, see below), all `0600`.
-The admin window's footer has **Info** (these paths, with copy buttons) and
-**Open source licenses**; the guest page footer has the same licenses link (`ui/attributions.ts`, direct dependencies only:
-update it when adding one).
+## What the host can do
 
-### What is and isn't stored
+- Pause, resume, skip, seek, set volume, reorder and remove playlist items.
+- See connected guests; disconnect, remove, or block anyone.
+- **Invitation-only mode**: newcomers need a link from the admin's Invitations
+  card. Each link works once and expires; people already in the room stay in.
+- Reset the "most played" list.
+- Switch the language (English / 한국어). Guests have their own toggle.
 
-- Guest identity is a random cookie. The database keeps only its SHA-256, so
-  reading the file does not let anyone impersonate a guest.
-- Invitation codes are stored as SHA-256 too. The plaintext is shown in the
-  admin window only for codes created since the app was launched.
-- The Spotify token and the YouTube API key must be usable, so they cannot be
-  hashed. Each is sealed at rest in its own `0600` file outside the database.
-  On Windows the sealing is DPAPI, keyed by the logged-in user's credentials,
-  so a copied file or another account on the PC cannot read it. Elsewhere it is
-  AES-256-GCM with a random key in `secret.key` beside the data, which guards a
-  copied file but not the same account; the OS keychain is the upgrade there.
-  Files written by older builds in plaintext are sealed on first read.
-- bcrypt is not used because there are no passwords: every secret here is a
-  high-entropy random token, where a fast hash is the correct choice.
+Settings, guests, blocks, invitations and the playlist survive a relaunch.
 
-## Develop
+## Privacy and security
 
-```sh
-make install     # Go modules, Wails CLI, both frontends
-make dev         # admin window with hot reload
-make dev-web     # guest UI on :5173, proxies /api to the guest server
-make test
-make lint        # gofmt + go vet
-```
+- Guests are identified by a random cookie and the name they typed. The host
+  sees names, not phones or accounts.
+- Your Spotify login token and YouTube key are stored encrypted on the host PC
+  (Windows user-account encryption) and never sent to guests.
+- The **Info** link in the admin footer shows where the data and the log file
+  live. The log records requests and actions on this host only.
+- Everything runs on your local network. Nothing is uploaded anywhere except
+  the calls to Spotify and Google that you set up.
 
-## Build
+## Troubleshooting
 
-Every push runs `.github/workflows/ci.yml`: both UIs build, `make lint`,
-`make test`, and a Windows `.exe` is attached to the run as an artifact.
-
-```sh
-make build           # this machine: both UIs embedded, output in build/bin/
-make build-windows   # CGO-free Windows .exe from any OS
-```
-
-`make help` lists every target. `wails.json` chains the guest UI build into
-`frontend:build`, so `wails build` alone also produces the whole binary.
-
-## Layout
-
-```
-main.go, app.go            Wails app: bindings, config, guest server lifecycle
-logging.go                 JSON log file in the data dir; std log routed into it
-internal/source/           Source interface (Track, Playback, ArtworkProvider)
-internal/source/local/     folder scan, tags, search, beep playback
-internal/source/spotify/   PKCE connect, Web API remote control, end detection
-internal/source/youtube/   Data API search, embedded IFrame player control
-internal/source/fake/      in-memory source for tests
-internal/player/           queue, votes, skip threshold, poll loop, state fan-out
-internal/config/           settings (in the store) and the Spotify token file
-internal/store/            SQLite: settings, guests, invitations, queue
-internal/server/           Chi: guest cookie + name, /api/*, SSE, SPA fallback
-ui/theme.css               DESIGN.md tokens mapped onto shadcn-vue's CSS variables
-ui/i18n.ts                 framework-free EN/KO lookup shared by both UIs
-ui/attributions.ts         open-source list shown by both UIs
-frontend/                  admin UI (Vue + Vite + Tailwind + shadcn-vue), embedded by Wails
-web/                       guest UI (Vue + Vite + Tailwind + shadcn-vue), embedded via web/embed.go
-```
-
-### UI stack
-
-Both apps use [shadcn-vue](https://www.shadcn-vue.com/) components copied into
-`src/components/ui/` (reka-ui primitives, Tailwind v4, lucide icons). Add more with
-
-```sh
-cd web && npx shadcn-vue@latest add dialog   # or frontend/
-```
-
-The theme in `ui/theme.css` maps DESIGN.md's Geist tokens onto shadcn's
-variables, so components pick up the ink/hairline look without per-component
-overrides. TypeScript is pinned to 5.x in both apps: Vue's SFC compiler needs
-the TS 5 JavaScript API to resolve the imported prop types shadcn components
-use, and the TypeScript 7 package does not ship it.
-
-### Adding a source
-
-Implement `source.Source` in `internal/source/<name>/`, add it to the
-`Sources` list in `app.go`, and give it a card in the admin UI. Nothing else
-changes. Optional interfaces: `source.ArtworkProvider` if artwork is not a
-public URL, `source.Charter` for a Top chart, `source.Browser` for artist and
-album pages (`/api/artist`, `/api/album`; set `ArtistID`/`AlbumID` on tracks
-so the guest UI knows what is linkable).
-
-## Spotify policy notes
-
-- Every Spotify track shown to guests carries the Spotify mark and a
-  "Listen on Spotify" link, per Spotify's design guidelines. Check the icon in
-  `web/src/SpotifyMark.vue` against the official brand kit before shipping.
-- Spotify is licensed for personal, non-commercial use. Where you play it is
-  on you.
-- Track end is detected by polling once a second, so there is a short gap
-  between songs. Repeat mode is switched off on activation because
-  repeat-track would defeat end detection.
+- **Guests cannot open the address**: same Wi-Fi? Firewall allowed? Try the
+  address on the host itself first.
+- **"Port already in use"**: change the port on the Server tab and press Start
+  again.
+- **No network at launch**: Spotify and YouTube stay off with a warning; local
+  files still work.
+- **Spotify: "Premium required"** or nothing plays: the connected account must
+  be Premium and the desktop app must be open and have played once.
+- **YouTube: key rejected**: use **Test key**; the message quotes Google's
+  reason. Usual causes: the API is not enabled on the key's project, or the key
+  has a website restriction. A new or edited key can take a few minutes.
+- **The exe shows the wrong icon**: Windows caches icons; rename the file once
+  or sign out and in.
 
 ## License
 
-MIT
+MIT. Open-source components are listed under **Open source licenses** in both
+the admin footer and the guest page footer.
