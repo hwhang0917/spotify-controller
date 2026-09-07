@@ -11,6 +11,27 @@ export interface Track {
   duration: number // nanoseconds (Go time.Duration)
   artworkUrl?: string
   externalUrl?: string
+  // browse keys; present only when the source can show that page
+  artistId?: string
+  albumId?: string
+}
+
+export interface Album {
+  id: string
+  name: string
+  artist: string
+  artistId?: string
+  year?: number
+  artworkUrl?: string
+  tracks?: Track[]
+}
+
+export interface Artist {
+  id: string
+  name: string
+  artworkUrl?: string
+  tracks: Track[]
+  albums: Album[]
 }
 
 export interface QueueItem {

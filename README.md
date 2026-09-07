@@ -108,7 +108,13 @@ Search is limited to YouTube's Music category.
 ## Run
 
 Start the guest server from the admin window and share the URL it shows.
-Guests type a name, then search, request, upvote, and vote to skip.
+Guests type a name, then see what is playing, the playlist, and a **Request a
+song** button that opens `/search`: a search bar with one chip per source,
+and, while the box is empty, the source's Top chart (YouTube), the most-played
+songs on this host, and the guest's favorites (hearts, kept in the browser
+only). Artists and albums in results are links to artist and album pages for
+every source. Requesting a song that is playing or already queued asks first.
+Off the home page, a foldable bar at the bottom shows what is playing.
 
 Data lives in `$XDG_CONFIG_HOME/vibe-music/` (Linux),
 `~/Library/Application Support/vibe-music/` (macOS), or `%AppData%\vibe-music\`

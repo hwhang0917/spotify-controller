@@ -19,6 +19,7 @@ export const goDeps: Attribution[] = [
 
 export const uiDeps: Attribution[] = [
   { name: 'Vue', license: 'MIT', url: 'https://vuejs.org' },
+  { name: 'Vue Router', license: 'MIT', url: 'https://router.vuejs.org' },
   { name: 'Vite', license: 'MIT', url: 'https://vite.dev' },
   { name: 'Tailwind CSS', license: 'MIT', url: 'https://tailwindcss.com' },
   { name: 'shadcn-vue', license: 'MIT', url: 'https://www.shadcn-vue.com' },
