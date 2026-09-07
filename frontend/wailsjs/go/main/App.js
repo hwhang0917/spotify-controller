@@ -16,6 +16,7 @@ export function SetVolume(arg1) { return app()['SetVolume'](arg1); }
 export function StartServer(arg1) { return app()['StartServer'](arg1); }
 export function StopServer() { return app()['StopServer'](); }
 export function Status() { return app()['Status'](); }
+export function Info() { return app()['Info'](); }
 export function Guests() { return app()['Guests'](); }
 export function KickGuest(arg1) { return app()['KickGuest'](arg1); }
 export function RemoveGuest(arg1) { return app()['RemoveGuest'](arg1); }

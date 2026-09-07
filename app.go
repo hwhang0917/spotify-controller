@@ -139,6 +139,14 @@ type App struct {
 	spotify *spotify.Source
 	youtube *youtube.Source
 	cancel  context.CancelFunc
+	info    AppInfo
+}
+
+// AppInfo is what the admin's Info tab shows.
+type AppInfo struct {
+	DataDir string `json:"dataDir"`
+	DBPath  string `json:"dbPath"`
+	LogPath string `json:"logPath"`
 }
 
 type ServerStatus struct {
@@ -166,7 +174,11 @@ func (a *App) startup(ctx context.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	a.db, err = store.Open(filepath.Join(dir, config.DBFile))
+	a.info = AppInfo{DataDir: dir, DBPath: filepath.Join(dir, config.DBFile), LogPath: filepath.Join(dir, logFile)}
+	if err := setupLog(a.info.LogPath); err != nil {
+		log.Println("log file:", err)
+	}
+	a.db, err = store.Open(a.info.DBPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -631,6 +643,9 @@ func (a *App) StopServer() error {
 	a.srv, a.url = nil, ""
 	return err
 }
+
+// Info reports where this install keeps its data and logs.
+func (a *App) Info() AppInfo { return a.info }
 
 func (a *App) Status() ServerStatus {
 	a.mu.Lock()

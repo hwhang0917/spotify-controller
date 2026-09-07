@@ -78,7 +78,8 @@ func NewHandler(dist fs.FS, p *player.Player, guests *Guests, top TopFunc, onErr
 	}
 	s := &Server{player: p, guests: guests, top: top, onError: onError}
 	r := chi.NewRouter()
-	r.Use(middleware.Logger, middleware.Recoverer, noRobots, noStore)
+	// requests go through the app's logger (file + stderr), not chi's colored stdout one
+	r.Use(middleware.RequestLogger(&middleware.DefaultLogFormatter{Logger: log.Default(), NoColor: true}), middleware.Recoverer, noRobots, noStore)
 
 	r.Get(joinPath, s.join)
 

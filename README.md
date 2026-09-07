@@ -107,8 +107,13 @@ Guests type a name, then search, request, upvote, and vote to skip.
 Data lives in `$XDG_CONFIG_HOME/vibe-music/` (Linux),
 `~/Library/Application Support/vibe-music/` (macOS), or `%AppData%\vibe-music\`
 (Windows). Override the directory with `VIBE_MUSIC_DIR`. It holds
-`vibe-music.db` (settings, guests, invitations, queue) and, once connected,
-`spotify-token.json`, both `0600`.
+`vibe-music.db` (settings, guests, invitations, queue), `vibe-music.log`
+(JSON lines from the app and every guest request; one previous file is kept
+once it passes 5 MB) and, once connected, `spotify-token.json`, all `0600`.
+The admin's **Info** tab shows these paths with copy buttons; **Attribution**
+lists the open-source projects used, as does the "Open source licenses" link
+in the guest page footer (`ui/attributions.ts`, direct dependencies only:
+update it when adding one).
 
 ### What is and isn't stored
 
@@ -146,6 +151,7 @@ make build-windows   # CGO-free Windows .exe from any OS
 
 ```
 main.go, app.go            Wails app: bindings, config, guest server lifecycle
+logging.go                 JSON log file in the data dir; std log routed into it
 internal/source/           Source interface (Track, Playback, ArtworkProvider)
 internal/source/local/     folder scan, tags, search, beep playback
 internal/source/spotify/   PKCE connect, Web API remote control, end detection
@@ -157,6 +163,7 @@ internal/store/            SQLite: settings, guests, invitations, queue
 internal/server/           Chi: guest cookie + name, /api/*, SSE, SPA fallback
 ui/theme.css               DESIGN.md tokens mapped onto shadcn-vue's CSS variables
 ui/i18n.ts                 framework-free EN/KO lookup shared by both UIs
+ui/attributions.ts         open-source list shown by both UIs
 frontend/                  admin UI (Vue + Vite + Tailwind + shadcn-vue), embedded by Wails
 web/                       guest UI (Vue + Vite + Tailwind + shadcn-vue), embedded via web/embed.go
 ```

@@ -15,6 +15,7 @@ export function SetVolume(arg1: number): Promise<void>;
 export function StartServer(arg1: number): Promise<string>;
 export function StopServer(): Promise<void>;
 export function Status(): Promise<any>;
+export function Info(): Promise<any>;
 export function Guests(): Promise<any[]>;
 export function KickGuest(arg1: string): Promise<void>;
 export function RemoveGuest(arg1: string): Promise<void>;

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ArrowDown, ArrowUp, Ban, Check, ChevronUp, Copy, FolderOpen, FolderPlus, Minus, Pause, Play, Power, RefreshCw, RotateCw, SkipForward, Ticket, Trash2, Unplug, Users, Volume2, X } from '@lucide/vue'
+import { ArrowDown, ArrowUp, Ban, Check, ChevronUp, Copy, ExternalLink, FolderOpen, FolderPlus, Minus, Pause, Play, Power, RefreshCw, RotateCw, SkipForward, Ticket, Trash2, Unplug, Users, Volume2, X } from '@lucide/vue'
 import * as api from '../wailsjs/go/main/App'
 import { EventsOn, WindowReload } from '../wailsjs/runtime/runtime'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +21,8 @@ import YouTubePlayer from './YouTubePlayer.vue'
 import YouTubeIcon from './YouTubeIcon.vue'
 import HelpTip from './HelpTip.vue'
 import GuideDialog from './GuideDialog.vue'
+import { goDeps, uiDeps } from '../../ui/attributions'
+import { BrowserOpenURL } from '../wailsjs/runtime/runtime'
 import SourceIcon from './SourceIcon.vue'
 import Wave from './Wave.vue'
 import { toast } from 'vue-sonner'
@@ -196,6 +198,10 @@ const createInvitation = () => run('invite', async () => {
 const revokeInvitation = (id: number) => run('revoke', async () => { await api.RevokeInvitation(id); return t('toast.inviteRevoked') })
 const joinUrl = (code: string) => `${server.value.url || `http://<host>:${server.value.port}`}/join?invitationCode=${code}`
 const copyText = (text: string) => run('copy', async () => { await navigator.clipboard.writeText(text); return t('toast.linkCopied') })
+const copyPath = (text: string) => run('copy', async () => { await navigator.clipboard.writeText(text); return t('toast.pathCopied') })
+
+const info = ref<{ dataDir: string; dbPath: string; logPath: string } | null>(null)
+const infoRows = computed(() => info.value ? [['info.dataDir', info.value.dataDir], ['info.db', info.value.dbPath], ['info.log', info.value.logPath]] as const : [])
 const copyLink = (code: string) => copyText(joinUrl(code))
 const isExpired = (inv: Invitation) => new Date(inv.expiresAt).getTime() < Date.now()
 const fmtWhen = (iso: string) => new Date(iso).toLocaleString(locale.value === 'ko' ? 'ko-KR' : 'en-US', { dateStyle: 'short', timeStyle: 'short' })
@@ -229,6 +235,7 @@ const stops: Array<() => void> = []
 let poll: number | undefined
 let tick: number | undefined
 onMounted(async () => {
+  api.Info().then((v) => { info.value = v })
   await refresh().catch((e) => toast.error(tError(e)))
   stops.push(EventsOn('state', (s: State) => { state.value = s; api.Sources().then((x) => { sources.value = x }).catch(() => {}) }))
   stops.push(EventsOn('notice', (code: string) => { toast.warning(t(`notice.${code}`)) }))
@@ -378,6 +385,8 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
             <TabsTrigger value="server" class="flex-1">{{ t('tab.server') }}</TabsTrigger>
             <TabsTrigger value="sources" class="flex-1">{{ t('tab.sources') }}</TabsTrigger>
             <TabsTrigger value="guests" class="flex-1">{{ t('tab.guests') }} <Badge variant="secondary" class="ml-1">{{ guests.length }}</Badge></TabsTrigger>
+            <TabsTrigger value="info" class="flex-1">{{ t('tab.info') }}</TabsTrigger>
+            <TabsTrigger value="about" class="flex-1">{{ t('tab.about') }}</TabsTrigger>
           </TabsList>
 
           <!-- Server -->
@@ -663,6 +672,44 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                     </TableRow>
                   </TableBody>
                 </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="info" class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ t('info.title') }}</CardTitle>
+                <CardDescription class="whitespace-pre-line break-keep">{{ t('info.desc') }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div v-for="[label, path] in infoRows" :key="label" class="space-y-1">
+                  <Label>{{ t(label) }}</Label>
+                  <div class="flex items-center gap-2">
+                    <code class="min-w-0 flex-1 truncate rounded-md border bg-muted px-3 py-2 font-mono text-xs" :title="path">{{ path }}</code>
+                    <Button variant="outline" size="sm" :disabled="!!busy" :aria-label="t('info.copy')" @click="copyPath(path)"><Copy />{{ t('info.copy') }}</Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="about" class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ t('about.title') }}</CardTitle>
+                <CardDescription class="whitespace-pre-line break-keep">{{ t('about.desc') }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-6">
+                <div v-for="[label, deps] in [['about.go', goDeps], ['about.ui', uiDeps]] as const" :key="label" class="space-y-2">
+                  <p class="eyebrow">{{ t(label) }}</p>
+                  <ul class="divide-y rounded-md border">
+                    <li v-for="d in deps" :key="d.name" class="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                      <button type="button" class="flex min-w-0 items-center gap-1.5 hover:underline" @click="BrowserOpenURL(d.url)"><span class="truncate">{{ d.name }}</span><ExternalLink class="size-3 shrink-0 text-muted-foreground" /></button>
+                      <Badge variant="secondary" class="shrink-0 font-mono">{{ d.license }}</Badge>
+                    </li>
+                  </ul>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

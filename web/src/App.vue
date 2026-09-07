@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { goDeps, uiDeps } from '../../ui/attributions'
 import { Skeleton } from '@/components/ui/skeleton'
 import NowPlaying from './NowPlaying.vue'
 import TrackRow from './TrackRow.vue'
@@ -379,9 +381,27 @@ onUnmounted(() => { es?.close(); window.clearInterval(health); window.clearInter
       </Card>
     </div>
 
-    <template v-if="isSpotify || isYouTube">
-      <Separator />
-      <footer class="pb-4 text-center text-xs text-muted-foreground">{{ t(isYouTube ? 'youtube.footer' : 'spotify.footer') }}</footer>
-    </template>
+    <Separator />
+    <footer class="space-y-1 pb-4 text-center text-xs text-muted-foreground">
+      <p v-if="isSpotify || isYouTube">{{ t(isYouTube ? 'youtube.footer' : 'spotify.footer') }}</p>
+      <Dialog>
+        <DialogTrigger as-child><button type="button" class="underline-offset-4 hover:underline">{{ t('about.open') }}</button></DialogTrigger>
+        <DialogContent class="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{{ t('about.title') }}</DialogTitle>
+            <DialogDescription class="break-keep">{{ t('about.desc') }}</DialogDescription>
+          </DialogHeader>
+          <div v-for="[label, deps] in [['about.go', goDeps], ['about.ui', uiDeps]] as const" :key="label" class="space-y-2">
+            <p class="eyebrow">{{ t(label) }}</p>
+            <ul class="divide-y rounded-md border text-left">
+              <li v-for="d in deps" :key="d.name" class="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                <a :href="d.url" target="_blank" rel="noopener" class="truncate hover:underline">{{ d.name }}</a>
+                <Badge variant="secondary" class="shrink-0 font-mono">{{ d.license }}</Badge>
+              </li>
+            </ul>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </footer>
   </main>
 </template>
