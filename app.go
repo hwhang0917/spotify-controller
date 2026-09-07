@@ -31,6 +31,7 @@ import (
 
 // shutdownTimeout bounds how long StopServer waits for in-flight requests.
 const shutdownTimeout = 5 * time.Second
+const deactivateTimeout = 2 * time.Second // per-source cleanup budget on window close
 
 // Wails event names the admin UI listens on.
 const (
@@ -306,6 +307,10 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.cancel != nil {
 		a.cancel()
 	}
+	// Deactivate may call out (Spotify pause); the window stays open until this
+	// returns, so bound it rather than wait on a slow network.
+	ctx, cancel := context.WithTimeout(ctx, deactivateTimeout)
+	defer cancel()
 	for _, id := range a.player.EnabledIDs() {
 		if src, ok := a.player.Source(id); ok {
 			_ = src.Deactivate(ctx)
@@ -675,9 +680,17 @@ func (a *App) StartServer(port int) (string, error) {
 	if err != nil {
 		return "", uiError(err)
 	}
-	srv := &http.Server{Handler: server.NewHandler(web.Dist, a.player, a.guests, a.topTracks, func(err error) {
-		runtime.EventsEmit(a.ctx, sourceErrorEvent, err.Error())
-	})}
+	// Shutdown only waits for handlers; the SSE streams never finish on their
+	// own, so cancel their base context to end them instead of waiting out
+	// shutdownTimeout on every stop.
+	srvCtx, cancelSrv := context.WithCancel(context.Background())
+	srv := &http.Server{
+		Handler: server.NewHandler(web.Dist, a.player, a.guests, a.topTracks, func(err error) {
+			runtime.EventsEmit(a.ctx, sourceErrorEvent, err.Error())
+		}),
+		BaseContext: func(net.Listener) context.Context { return srvCtx },
+	}
+	srv.RegisterOnShutdown(cancelSrv)
 	go func() {
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Println("guest server:", err)
