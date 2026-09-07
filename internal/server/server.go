@@ -73,7 +73,7 @@ func NewHandler(dist fs.FS, p *player.Player, guests *Guests, top TopFunc) http.
 	}
 	s := &Server{player: p, guests: guests, top: top}
 	r := chi.NewRouter()
-	r.Use(middleware.Logger, middleware.Recoverer)
+	r.Use(middleware.Logger, middleware.Recoverer, noRobots)
 
 	r.Get(joinPath, s.join)
 
@@ -366,6 +366,14 @@ func (s *Server) artwork(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- helpers ---
+
+// noRobots marks every response as not for indexing; this is a private LAN page.
+func noRobots(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Robots-Tag", "noindex, nofollow, noarchive")
+		next.ServeHTTP(w, r)
+	})
+}
 
 func spa(dist fs.FS) http.HandlerFunc {
 	files := http.FileServer(http.FS(dist))
