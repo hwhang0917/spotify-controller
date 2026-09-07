@@ -187,7 +187,7 @@ func (p *Player) Tick(ctx context.Context) {
 	if p.current != src {
 		return // switched while we were polling
 	}
-	p.now = st
+	p.applyStatus(st)
 	if st.Track != nil && !p.sentAt.IsZero() {
 		expected := p.sentPos
 		if p.sentPlay {
@@ -517,7 +517,7 @@ func (p *Player) control(fn func(source.Source) error) error {
 	}
 	err := fn(p.current)
 	if st, serr := p.current.Status(context.Background()); serr == nil {
-		p.now = st
+		p.applyStatus(st)
 	}
 	p.broadcastIfChanged()
 	return err
@@ -653,6 +653,36 @@ func (p *Player) Subscribe() (<-chan State, func()) {
 }
 
 // --- internals (caller holds p.mu) ---
+
+// applyStatus adopts the source's snapshot but keeps the metadata the track was
+// queued with. A source only gets an ID on Play, so one that never searched for
+// that track this session (a most-played pick, a restored queue) answers with a
+// bare Track and the artwork and title would vanish once playback starts.
+func (p *Player) applyStatus(st source.Playback) {
+	if st.Track != nil && p.now.Track != nil && st.Track.ID == p.now.Track.ID {
+		q, t := *p.now.Track, *st.Track
+		if t.Title == "" {
+			t.Title = q.Title
+		}
+		if t.Artist == "" {
+			t.Artist = q.Artist
+		}
+		if t.Album == "" {
+			t.Album = q.Album
+		}
+		if t.ArtworkURL == "" {
+			t.ArtworkURL = q.ArtworkURL
+		}
+		if t.ExternalURL == "" {
+			t.ExternalURL = q.ExternalURL
+		}
+		if t.Duration == 0 {
+			t.Duration = q.Duration
+		}
+		st.Track = &t
+	}
+	p.now = st
+}
 
 // advance plays the queue head (switching source if the head lives elsewhere)
 // or stops when the queue is empty.

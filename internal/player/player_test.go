@@ -496,3 +496,19 @@ func TestPositionDriftForcesFrame(t *testing.T) {
 		t.Fatalf("seek frame: %+v %+v", s.NowPlaying, s.Event)
 	}
 }
+
+// A source that never searched for the queued track (most-played pick,
+// restored queue) reports a bare Track; the queued metadata must survive.
+func TestStatusKeepsQueuedMetadata(t *testing.T) {
+	p, f := setup(t)
+	full := source.Track{ID: "a", Title: "A", Artist: "Artist", ArtworkURL: "http://art/a.jpg", Source: "fake"}
+	p.Request(context.Background(), full, g1)
+	p.Tick(context.Background())
+	f.Current = &source.Track{ID: "a", Source: "fake"}
+	f.Playing = true
+	p.Tick(context.Background())
+	np := p.State().NowPlaying
+	if np == nil || np.Track.Title != "A" || np.Track.ArtworkURL != "http://art/a.jpg" {
+		t.Fatalf("metadata lost: %+v", np)
+	}
+}

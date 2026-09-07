@@ -290,7 +290,10 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
               <Artwork v-if="playingSource !== 'youtube'" :src="np?.track.artworkUrl?.startsWith('http') ? np.track.artworkUrl : undefined" class="aspect-square w-full sm:w-56 rounded-none" />
               <div class="flex flex-1 flex-col justify-between gap-4 px-6 py-5">
                 <div class="space-y-1">
-                  <p class="eyebrow flex items-center gap-1.5">{{ t('now') }}<template v-if="np"> · <SourceIcon :source="playingSource" class="size-3" />{{ playingSourceName }}</template></p>
+                  <div class="flex items-center justify-between gap-3">
+                    <p class="eyebrow flex items-center gap-1.5">{{ t('now') }}<template v-if="np"> · <SourceIcon :source="playingSource" class="size-3" />{{ playingSourceName }}</template></p>
+                    <Wave v-if="np" :playing="np.playing" />
+                  </div>
                   <template v-if="np">
                     <h2 class="text-2xl font-semibold tracking-tight leading-tight line-clamp-2">{{ np.track.title }}</h2>
                     <p class="text-base text-body truncate">{{ np.track.artist || '—' }}</p>
@@ -311,7 +314,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                       @update:model-value="onSeekInput" @value-commit="onSeekCommit"
                     />
                     <div class="flex items-center justify-between font-mono text-xs text-muted-foreground">
-                      <span class="flex items-center gap-2"><Wave :playing="!!np?.playing" />{{ fmtDuration(seekValue[0] * NS_PER_MS) }}</span>
+                      <span>{{ fmtDuration(seekValue[0] * NS_PER_MS) }}</span>
                       <span>{{ fmtDuration(np?.track.duration ?? 0) }}</span>
                     </div>
                   </div>
@@ -584,7 +587,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
 
             <Card>
               <CardHeader>
-                <CardTitle class="flex items-center gap-2"><YouTubeIcon />{{ t('youtube.title') }}<GuideDialog prefix="guide.youtube" :steps="5" :links="{ 1: 'https://console.cloud.google.com/apis/library/youtube.googleapis.com', 3: 'https://console.cloud.google.com/apis/credentials' }" note="guide.youtube.note" /></CardTitle>
+                <CardTitle class="flex items-center gap-2"><YouTubeIcon />{{ t('youtube.title') }}<GuideDialog prefix="guide.youtube" :steps="5" :links="{ 1: 'https://console.cloud.google.com/apis/library/youtube.googleapis.com', 3: 'https://console.cloud.google.com/apis/credentials' }" note="guide.youtube.note" note-link="https://support.google.com/youtube/contact/yt_api_form" /></CardTitle>
               </CardHeader>
               <CardContent class="space-y-3">
                 <div class="space-y-2">

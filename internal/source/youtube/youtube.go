@@ -303,18 +303,31 @@ func (s *Source) remember(vr videosResponse) []source.Track {
 // Test exercises the key the way the app uses it: one search and one chart
 // call. It returns a short human summary, or the first failure verbatim.
 func (s *Source) Test(ctx context.Context, region string) (string, error) {
+	hint := s.keyHint()
 	tracks, err := s.Search(ctx, "music", 1)
 	if err != nil {
-		return "", fmt.Errorf("search: %w", err)
+		return "", fmt.Errorf("search (key %s): %w", hint, err)
 	}
 	s.mu.Lock()
 	delete(s.charts, strings.ToUpper(strings.TrimSpace(region))) // force a live call
 	s.mu.Unlock()
 	chart, err := s.Chart(ctx, region, 1)
 	if err != nil {
-		return "", fmt.Errorf("chart: %w", err)
+		return "", fmt.Errorf("chart (key %s): %w", hint, err)
 	}
-	return fmt.Sprintf("search ok (%d), chart ok (%d)", len(tracks), len(chart)), nil
+	return fmt.Sprintf("key %s: search ok (%d), chart ok (%d)", hint, len(tracks), len(chart)), nil
+}
+
+// keyHint identifies the stored key without revealing it, so the admin can
+// tell which console key a test result is talking about.
+func (s *Source) keyHint() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := s.opts.APIKey
+	if len(k) < 8 {
+		return fmt.Sprintf("%d chars", len(k))
+	}
+	return fmt.Sprintf("%s…%s, %d chars", k[:6], k[len(k)-2:], len(k))
 }
 
 // Chart returns the most popular music videos in a region (videos.list with

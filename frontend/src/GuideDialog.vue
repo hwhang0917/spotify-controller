@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { BrowserOpenURL } from '../wailsjs/runtime/runtime'
 import { t } from './i18n'
 
-const props = defineProps<{ prefix: string; steps: number; links?: Record<number, string>; note?: string; vars?: Record<string, string | number> }>()
+const props = defineProps<{ prefix: string; steps: number; links?: Record<number, string>; note?: string; noteLink?: string; vars?: Record<string, string | number> }>()
 const stepKeys = Array.from({ length: props.steps }, (_, i) => i + 1)
 </script>
 
@@ -22,7 +22,7 @@ const stepKeys = Array.from({ length: props.steps }, (_, i) => i + 1)
     <DialogContent class="max-h-[85vh] w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-2xl">
       <DialogHeader>
         <DialogTitle>{{ t(`${prefix}.title`) }}</DialogTitle>
-        <DialogDescription class="break-keep text-base leading-relaxed">{{ t(`${prefix}.intro`) }}</DialogDescription>
+        <DialogDescription class="whitespace-pre-line break-keep text-base leading-relaxed">{{ t(`${prefix}.intro`) }}</DialogDescription>
       </DialogHeader>
       <ol class="space-y-4 text-base leading-relaxed">
         <li v-for="n in stepKeys" :key="n" class="flex gap-3">
@@ -35,7 +35,12 @@ const stepKeys = Array.from({ length: props.steps }, (_, i) => i + 1)
           </div>
         </li>
       </ol>
-      <p v-if="note" class="break-keep rounded-md border bg-muted px-4 py-3 text-sm leading-relaxed text-muted-foreground">{{ t(note, vars) }}</p>
+      <div v-if="note" class="space-y-2 rounded-md border bg-muted px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+        <p class="whitespace-pre-line break-keep">{{ t(note, vars) }}</p>
+        <Button v-if="noteLink" variant="outline" size="sm" class="max-w-full" @click="BrowserOpenURL(noteLink)">
+          <ExternalLink /><span class="truncate">{{ noteLink.replace(/^https?:\/\//, '') }}</span>
+        </Button>
+      </div>
     </DialogContent>
   </Dialog>
 </template>

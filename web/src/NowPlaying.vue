@@ -44,9 +44,12 @@ const pct = computed(() => {
         <Artwork :src="np.track.artworkUrl" :alt="np.track.album" class="aspect-square w-full sm:w-56 rounded-none" />
         <div class="flex flex-1 flex-col justify-between gap-4 px-6 py-5 sm:px-8">
           <div class="space-y-1">
-            <p class="eyebrow flex items-center gap-1.5">
-              {{ t('now.eyebrow') }}<template v-if="np"> · <SourceIcon :source="np.track.source" class="size-3" />{{ sourceName }}</template>
-            </p>
+            <div class="flex items-center justify-between gap-3">
+              <p class="eyebrow flex items-center gap-1.5">
+                {{ t('now.eyebrow') }} · <SourceIcon :source="np.track.source" class="size-3" />{{ sourceName }}
+              </p>
+              <Wave :playing="np.playing" />
+            </div>
             <h2 class="text-2xl font-semibold tracking-tight leading-tight line-clamp-2">{{ np.track.title }}</h2>
             <p class="text-base text-body truncate">{{ np.track.artist || '—' }}</p>
             <p v-if="np.track.album" class="text-sm text-muted-foreground truncate">{{ np.track.album }}</p>
@@ -61,7 +64,7 @@ const pct = computed(() => {
             <div class="space-y-1.5">
               <Progress :model-value="pct" class="h-1.5" />
               <div class="flex items-center justify-between font-mono text-xs text-muted-foreground">
-                <span class="flex items-center gap-2"><Wave :playing="np.playing" />{{ fmtDuration(positionMs * NS_PER_MS) }}</span>
+                <span>{{ fmtDuration(positionMs * NS_PER_MS) }}</span>
                 <span>{{ fmtDuration(np.track.duration) }}</span>
               </div>
             </div>
