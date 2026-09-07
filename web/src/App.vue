@@ -21,6 +21,8 @@ const SEARCH_DEBOUNCE_MS = 300
 
 const name = ref('')
 const nameInput = ref('')
+// Until /api/me answers we do not know whether to show the gate or the player.
+const loading = ref(true)
 const state = ref<State | null>(null)
 const query = ref('')
 const results = ref<Track[]>([])
@@ -132,6 +134,7 @@ onMounted(async () => {
     const me = await api<{ name: string }>('GET', '/api/me')
     name.value = me.name
   })
+  loading.value = false
   if (blocked.value || inviteRequired.value || offline.value) return
   inviteRequired.value = false
   es = new EventSource('/api/events')
@@ -159,8 +162,11 @@ onUnmounted(() => { es?.close(); window.clearInterval(health) })
   </div>
   <Toaster position="bottom-right" rich-colors close-button />
 
+  <!-- deciding which screen applies: keep the canvas blank rather than flash the gate -->
+  <main v-if="loading && !offline" class="min-h-screen" aria-busy="true" />
+
   <!-- invitation required -->
-  <main v-if="inviteRequired && !blocked" class="min-h-screen flex items-center justify-center p-6" :class="offline ? 'pointer-events-none opacity-50' : ''">
+  <main v-else-if="inviteRequired && !blocked" class="min-h-screen flex items-center justify-center p-6" :class="offline ? 'pointer-events-none opacity-50' : ''">
     <Card class="w-full max-w-sm">
       <CardHeader>
         <p class="eyebrow">vibe-music</p>
