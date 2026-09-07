@@ -1,0 +1,57 @@
+/* DESIGN.md tokens (Geist system) as Tailwind v4 theme. Imported by frontend/ and web/. */
+@theme {
+  --color-canvas: #fafafa;
+  --color-canvas-elevated: #ffffff;
+  --color-hairline-soft: #f2f2f2;
+  --color-hairline: #ebebeb;
+  --color-ink: #171717;
+  --color-body: #4d4d4d;
+  --color-mute: #8f8f8f;
+  --color-faint: #a1a1a1;
+  --color-link: #0070f3;
+  --color-link-deep: #0761d1;
+  --color-link-soft: #d3e5ff;
+  --color-error: #ee0000;
+  --color-error-deep: #c50000;
+  --color-warning: #f5a623;
+  --color-spotify: #1ed760;
+
+  --font-sans: "Geist Sans", Inter, Arial, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 100px;
+
+  --shadow-whisper: 0px 1px 1px rgba(0, 0, 0, 0.04);
+  --shadow-floating: 0px 2px 2px rgba(0, 0, 0, 0.04), 0px 8px 16px -4px rgba(0, 0, 0, 0.08);
+}
+
+@layer base {
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+  }
+}
+
+/* Reusable pieces shared by admin and guest UIs */
+@utility card {
+  @apply bg-canvas-elevated border border-hairline rounded-md p-6;
+}
+@utility eyebrow {
+  @apply font-mono text-xs font-medium uppercase tracking-normal text-mute;
+}
+@utility btn {
+  @apply inline-flex items-center justify-center h-9 px-3 rounded-sm text-sm font-medium
+    disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+}
+@utility btn-primary {
+  @apply btn bg-ink text-white hover:bg-body;
+}
+@utility btn-ghost {
+  @apply btn bg-canvas-elevated text-ink border border-hairline hover:bg-hairline-soft;
+}
+@utility input {
+  @apply h-9 w-full rounded-sm border border-hairline bg-canvas-elevated px-3 text-sm text-ink
+    placeholder:text-faint focus:outline-none focus:border-ink disabled:opacity-50;
+}

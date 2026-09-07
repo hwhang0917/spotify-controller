@@ -29,30 +29,25 @@ onMounted(refresh)
 </script>
 
 <template>
-  <main class="min-h-screen bg-neutral-950 text-neutral-100 p-8 space-y-6">
-    <h1 class="text-2xl font-bold">vibe-music admin</h1>
+  <main class="min-h-screen p-8 space-y-6">
+    <header>
+      <p class="eyebrow">admin</p>
+      <h1 class="text-2xl font-semibold tracking-tight">vibe-music</h1>
+    </header>
 
-    <section class="space-y-3 max-w-sm">
-      <label class="block text-sm text-neutral-400">
+    <section class="card max-w-sm space-y-4">
+      <p class="eyebrow">server</p>
+      <label class="block text-sm text-body">
         Guest server port
-        <input
-          v-model.number="port"
-          type="number"
-          :disabled="running"
-          class="mt-1 w-full rounded bg-neutral-900 border border-neutral-700 px-3 py-2 disabled:opacity-50"
-        />
+        <input v-model.number="port" type="number" :disabled="running" class="input mt-1" />
       </label>
-      <button
-        @click="toggle"
-        class="rounded px-4 py-2 font-medium"
-        :class="running ? 'bg-rose-600 hover:bg-rose-500' : 'bg-emerald-600 hover:bg-emerald-500'"
-      >
+      <button @click="toggle" :class="running ? 'btn-ghost' : 'btn-primary'">
         {{ running ? 'Stop server' : 'Start server' }}
       </button>
-      <p v-if="running" class="text-sm">
-        Guests join at <a :href="url" target="_blank" class="underline text-emerald-400">{{ url }}</a>
+      <p v-if="running" class="text-sm text-body">
+        Guests join at <a :href="url" target="_blank" class="text-link underline">{{ url }}</a>
       </p>
-      <p v-if="error" class="text-sm text-rose-400">{{ error }}</p>
+      <p v-if="error" class="text-sm text-error">{{ error }}</p>
     </section>
   </main>
 </template>

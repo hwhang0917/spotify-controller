@@ -7,5 +7,9 @@ const API_PROXY = process.env.VITE_API_PROXY ?? 'http://127.0.0.1:5555'
 
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
-  server: { proxy: { '/api': API_PROXY } },
+  server: {
+    proxy: { '/api': API_PROXY },
+    // ../ui/theme.css lives outside this Vite root
+    fs: { allow: ['..'] },
+  },
 })

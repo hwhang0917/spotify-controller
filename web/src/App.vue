@@ -14,12 +14,14 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col items-center justify-center gap-4 p-8">
-    <h1 class="text-4xl font-bold tracking-tight">vibe-music</h1>
-    <p class="text-neutral-400">Guest UI</p>
-    <p class="text-sm">
-      server:
-      <span :class="status === 'ok' ? 'text-emerald-400' : 'text-rose-400'">{{ status }}</span>
-    </p>
+  <main class="min-h-screen flex items-center justify-center p-6">
+    <section class="card w-full max-w-sm space-y-3">
+      <p class="eyebrow">guest</p>
+      <h1 class="text-2xl font-semibold tracking-tight">vibe-music</h1>
+      <p class="text-sm text-body">
+        server
+        <span class="font-mono" :class="status === 'ok' ? 'text-link' : 'text-error'">{{ status }}</span>
+      </p>
+    </section>
   </main>
 </template>
