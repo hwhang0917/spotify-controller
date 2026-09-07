@@ -205,7 +205,7 @@ const joinUrl = (code: string) => `${server.value.url || `http://<host>:${server
 const copyText = (text: string) => run('copy', async () => { await navigator.clipboard.writeText(text); return t('toast.linkCopied') })
 const copyPath = (text: string) => run('copy', async () => { await navigator.clipboard.writeText(text); return t('toast.pathCopied') })
 
-const info = ref<{ dataDir: string; dbPath: string; logPath: string } | null>(null)
+const info = ref<{ version: string; dataDir: string; dbPath: string; logPath: string } | null>(null)
 const infoRows = computed(() => info.value ? [['info.dataDir', info.value.dataDir], ['info.db', info.value.dbPath], ['info.log', info.value.logPath]] as const : [])
 const copyLink = (code: string) => copyText(joinUrl(code))
 const isExpired = (inv: Invitation) => new Date(inv.expiresAt).getTime() < Date.now()
@@ -701,6 +701,10 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
               <DialogDescription class="whitespace-pre-line break-keep">{{ t('info.desc') }}</DialogDescription>
             </DialogHeader>
             <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <Label>{{ t('info.version') }}</Label>
+                <Badge variant="secondary" class="font-mono">v{{ info?.version }}</Badge>
+              </div>
               <div v-for="[label, path] in infoRows" :key="label" class="space-y-1">
                 <Label>{{ t(label) }}</Label>
                 <div class="flex items-center gap-2">

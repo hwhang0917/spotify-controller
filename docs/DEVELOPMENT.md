@@ -81,7 +81,22 @@ UIs are `go:embed`ed, so they must be built before anything Go compiles.
 
 CI (`.github/workflows/ci.yml`) runs on every push and PR: build both UIs,
 `make lint`, `make test`, then cross-builds the Windows exe and attaches it to
-the run as an artifact.
+the run as a short-lived artifact.
+
+### Releasing
+
+`VERSION` holds the version (e.g. `0.0.1`); `version.go` embeds it, so the
+binary, the admin Info dialog and the guest About dialog all show the same
+value with no build flags. To release: bump `VERSION`, commit, then
+
+```sh
+git tag v$(cat VERSION) && git push origin v$(cat VERSION)
+```
+
+`.github/workflows/release.yml` checks the tag against `VERSION`, builds
+windows/amd64 and linux/amd64 (Ubuntu, Windows cross-compiled) and
+darwin/amd64 (macOS runner), and publishes them on a GitHub release with
+generated notes. ARM targets are not built yet.
 
 ## Layout
 

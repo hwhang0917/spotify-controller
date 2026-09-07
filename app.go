@@ -147,6 +147,7 @@ type App struct {
 
 // AppInfo is what the admin's Info tab shows.
 type AppInfo struct {
+	Version string `json:"version"`
 	DataDir string `json:"dataDir"`
 	DBPath  string `json:"dbPath"`
 	LogPath string `json:"logPath"`
@@ -193,11 +194,12 @@ func (a *App) startup(ctx context.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	a.info = AppInfo{DataDir: dir, DBPath: filepath.Join(dir, config.DBFile), LogPath: filepath.Join(dir, logFile)}
+	a.info = AppInfo{Version: version, DataDir: dir, DBPath: filepath.Join(dir, config.DBFile), LogPath: filepath.Join(dir, logFile)}
 	if err := setupLog(a.info.LogPath); err != nil {
 		log.Println("log file:", err)
 	}
-	slog.Info("startup", "dataDir", dir)
+	slog.Info("startup", "version", version, "dataDir", dir)
+	server.Version = version
 	a.db, err = store.Open(a.info.DBPath)
 	if err != nil {
 		log.Fatal(err)

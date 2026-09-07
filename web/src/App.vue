@@ -19,7 +19,7 @@ import NowPlayingBar from './NowPlayingBar.vue'
 import { t } from './i18n'
 import {
   act, api, blocked, connected, error, inviteInvalid, inviteRequired, isSpotify, isYouTube, loading, name, nameInput,
-  offline, pendingRequest, saveName, startStream, state, submit, teardown,
+  offline, pendingRequest, saveName, startStream, state, submit, teardown, version,
 } from './state'
 
 const route = useRoute()
@@ -43,8 +43,9 @@ onMounted(async () => {
     router.replace('/')
   }
   await act(async () => {
-    const me = await api<{ name: string }>('GET', '/api/me')
+    const me = await api<{ name: string; version: string }>('GET', '/api/me')
     name.value = me.name
+    version.value = me.version
   })
   loading.value = false
   if (blocked.value || inviteRequired.value || offline.value) return
@@ -138,6 +139,7 @@ onUnmounted(teardown)
           <DialogHeader>
             <DialogTitle>{{ t('about.title') }}</DialogTitle>
             <DialogDescription class="break-keep">{{ t('about.desc') }}</DialogDescription>
+            <p v-if="version" class="font-mono text-xs text-muted-foreground">vibe-music v{{ version }}</p>
           </DialogHeader>
           <Button variant="outline" class="w-full" as-child>
             <a :href="repoURL" target="_blank" rel="noopener"><GitHubIcon />{{ t('about.github') }}</a>

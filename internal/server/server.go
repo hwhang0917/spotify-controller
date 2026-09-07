@@ -38,6 +38,9 @@ const (
 // TopFunc returns the most played tracks of a source (play history).
 type TopFunc func(sourceID string, limit int) ([]source.Track, error)
 
+// Version is shown to guests (About dialog); set by the app at startup.
+var Version = "dev"
+
 type Server struct {
 	player  *player.Player
 	guests  *Guests
@@ -263,7 +266,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	g := guestFrom(r)
-	writeJSON(w, http.StatusOK, map[string]string{"id": g.ID, "name": g.Name})
+	writeJSON(w, http.StatusOK, map[string]string{"id": g.ID, "name": g.Name, "version": Version})
 }
 
 func (s *Server) setMe(w http.ResponseWriter, r *http.Request) {

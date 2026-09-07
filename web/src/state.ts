@@ -7,6 +7,7 @@ import { fmtDuration } from './types'
 import type { State, Track } from './types'
 
 export const name = ref('')
+export const version = ref('') // host app version, from /api/me
 export const nameInput = ref('')
 // Until /api/me answers we do not know whether to show the gate or the player.
 export const loading = ref(true)
@@ -71,7 +72,8 @@ export function waitForAccess() {
   if (access !== undefined) return
   access = window.setInterval(async () => {
     try {
-      const me = await api<{ name: string }>('GET', '/api/me')
+      const me = await api<{ name: string; version: string }>('GET', '/api/me')
+      version.value = me.version
       window.clearInterval(access)
       access = undefined
       inviteRequired.value = false

@@ -35,7 +35,7 @@ test: ## Run Go tests
 	go test $(GO_PKGS)
 
 lint: ## gofmt check, go vet, and Vue type-check for both UIs
-	@test -z "$$(gofmt -l main.go app.go logging.go internal web | tee /dev/stderr)" || (echo "gofmt: files need formatting" && exit 1)
+	@test -z "$$(gofmt -l *.go internal web | tee /dev/stderr)" || (echo "gofmt: files need formatting" && exit 1)
 	go vet $(GO_PKGS)
 	npm --prefix frontend run typecheck
 	npm --prefix web run typecheck
