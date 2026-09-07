@@ -244,8 +244,8 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
 <template>
   <TooltipProvider>
     <Toaster position="bottom-right" rich-colors close-button />
-    <main class="mx-auto min-h-screen max-w-6xl space-y-6 p-6 lg:p-8">
-      <header class="flex items-center justify-between">
+    <main class="mx-auto flex min-h-screen max-w-7xl flex-col gap-4 p-4 lg:h-screen lg:overflow-hidden lg:p-6">
+      <header class="flex shrink-0 items-center justify-between">
         <div>
           <p class="eyebrow">{{ t('admin') }}</p>
           <h1 class="text-2xl font-semibold tracking-tight">vibe-music</h1>
@@ -269,8 +269,8 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
         </div>
       </header>
 
-      <div v-if="cfg" class="grid items-stretch gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div class="flex min-w-0 flex-col gap-6">
+      <div v-if="cfg" class="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-stretch">
+        <div class="flex min-w-0 flex-col gap-4 lg:min-h-0">
         <!-- Player -->
         <Card class="shrink-0 overflow-hidden">
           <CardContent class="p-0">
@@ -279,8 +279,8 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
               <YouTubePlayer v-if="youtubeEnabled" v-show="playingSource === 'youtube'">
                 <template #blocked>{{ t('youtube.blocked') }}</template>
               </YouTubePlayer>
-              <Artwork v-if="playingSource !== 'youtube'" :src="np?.track.artworkUrl?.startsWith('http') ? np.track.artworkUrl : undefined" class="aspect-square w-full sm:w-64 rounded-none" />
-              <div class="flex flex-1 flex-col justify-between gap-5 px-8 py-6">
+              <Artwork v-if="playingSource !== 'youtube'" :src="np?.track.artworkUrl?.startsWith('http') ? np.track.artworkUrl : undefined" class="aspect-square w-full sm:w-56 rounded-none" />
+              <div class="flex flex-1 flex-col justify-between gap-4 px-6 py-5">
                 <div class="space-y-1">
                   <p class="eyebrow flex items-center gap-1.5">{{ t('now') }}<template v-if="np"> · <SourceIcon :source="playingSource" class="size-3" />{{ playingSourceName }}</template></p>
                   <template v-if="np">
@@ -326,7 +326,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
         </Card>
 
         <!-- Queue: fills whatever height the right column has -->
-        <Card class="flex min-h-[16rem] flex-1 flex-col">
+        <Card class="flex min-h-[14rem] flex-1 flex-col lg:min-h-0">
           <CardHeader>
             <CardTitle>{{ t('queue.title') }} <Badge variant="secondary" class="ml-1">{{ state?.queue.length ?? 0 }}</Badge></CardTitle>
             <CardDescription>{{ t('queue.desc') }}</CardDescription>
@@ -362,15 +362,15 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
         </div>
 
         <!-- Controls -->
-        <Tabs default-value="server" class="min-w-0 self-start">
-          <TabsList class="w-full">
+        <Tabs default-value="server" class="flex min-w-0 flex-col lg:min-h-0">
+          <TabsList class="w-full shrink-0">
             <TabsTrigger value="server" class="flex-1">{{ t('tab.server') }}</TabsTrigger>
             <TabsTrigger value="sources" class="flex-1">{{ t('tab.sources') }}</TabsTrigger>
             <TabsTrigger value="guests" class="flex-1">{{ t('tab.guests') }} <Badge variant="secondary" class="ml-1">{{ guests.length }}</Badge></TabsTrigger>
           </TabsList>
 
           <!-- Server -->
-          <TabsContent value="server">
+          <TabsContent value="server" class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             <Card>
               <CardHeader>
                 <CardTitle>{{ t('server.title') }}</CardTitle>
@@ -447,7 +447,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
           </TabsContent>
 
           <!-- Sources -->
-          <TabsContent value="sources" class="space-y-4">
+          <TabsContent value="sources" class="space-y-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             <ul class="divide-y overflow-hidden rounded-lg border bg-card">
               <li
                 v-for="s in sources" :key="s.id"
@@ -586,7 +586,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
           </TabsContent>
 
           <!-- Guests -->
-          <TabsContent value="guests">
+          <TabsContent value="guests" class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             <Card>
               <CardHeader>
                 <CardTitle>{{ t('guests.title') }}</CardTitle>

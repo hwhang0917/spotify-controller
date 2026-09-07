@@ -18,9 +18,11 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "vibe-music",
-		Width:  900,
-		Height: 640,
+		Title:     "vibe-music",
+		Width:     1200,
+		Height:    800,
+		MinWidth:  960,
+		MinHeight: 640,
 		AssetServer: &assetserver.Options{
 			Assets: adminAssets,
 		},
