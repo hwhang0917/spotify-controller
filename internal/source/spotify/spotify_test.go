@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/zmb3/spotify/v2"
+
+	"github.com/hwhang0917/vibe-music/internal/source"
 	"golang.org/x/oauth2"
 )
 
@@ -142,5 +144,19 @@ func TestRedirectURIAndBusyPort(t *testing.T) {
 	s.SetCallbackPort(ln.Addr().(*net.TCPAddr).Port)
 	if err := s.Connect(context.Background()); !errors.Is(err, ErrCallbackPort) {
 		t.Fatalf("busy port: %v", err)
+	}
+}
+
+func TestWrapAPIPremium(t *testing.T) {
+	err := wrapAPI(errors.New("spotify: couldn't decode error: (159) [Active premium subscription required for the owner of the app.]"))
+	if !errors.Is(err, ErrPremium) || source.ErrorCode(err, "?") != "spotify_premium_required" {
+		t.Fatalf("premium: %v", err)
+	}
+	if wrapAPI(nil) != nil {
+		t.Fatal("nil passes through")
+	}
+	other := errors.New("boom")
+	if wrapAPI(other) != other {
+		t.Fatal("unknown errors pass through unchanged")
 	}
 }

@@ -57,6 +57,7 @@ const messages: Messages = {
     'err.youtube_key_invalid': 'The host\'s YouTube API key is not working. Ask them to check the admin window.',
     'err.youtube_api_key': 'The host has not set up a YouTube API key yet.',
     'err.spotify_not_connected': 'The host has not connected Spotify yet.',
+    'err.spotify_premium_required': 'The host\'s Spotify account needs Premium for this to work.',
   },
   ko: {
     'gate.title': '이름을 알려주세요',
@@ -113,6 +114,7 @@ const messages: Messages = {
     'err.youtube_key_invalid': '호스트의 YouTube API 키가 동작하지 않아요. 관리 창을 확인해 달라고 요청해 주세요.',
     'err.youtube_api_key': '호스트가 아직 YouTube API 키를 설정하지 않았어요.',
     'err.spotify_not_connected': '호스트가 아직 Spotify를 연결하지 않았어요.',
+    'err.spotify_premium_required': '호스트의 Spotify 계정에 Premium이 필요해요.',
   },
 }
 

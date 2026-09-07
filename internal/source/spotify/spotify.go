@@ -51,7 +51,23 @@ var (
 	ErrLoginTimeout   = &source.CodedError{Kind: "spotify_login_timeout", Msg: "spotify: login not completed"}
 	ErrLoginCancelled = &source.CodedError{Kind: "spotify_login_cancelled", Msg: "spotify: login cancelled"}
 	ErrCallbackPort   = &source.CodedError{Kind: "spotify_callback_port", Msg: "spotify: callback port is in use"}
+	ErrPremium        = &source.CodedError{Kind: "spotify_premium_required", Msg: "spotify: the account that owns the app needs an active Premium subscription"}
 )
+
+// wrapAPI maps Web API failures the host can act on to coded errors; the
+// library's own text (e.g. "couldn't decode error: (159) [...]") stays for
+// anything else.
+func wrapAPI(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "premium"):
+		return fmt.Errorf("%w: %v", ErrPremium, err)
+	}
+	return err
+}
 
 // clientIDPattern: Spotify client IDs are 32 lowercase hex characters.
 var clientIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
@@ -281,7 +297,7 @@ func (s *Source) Devices(ctx context.Context) ([]Device, error) {
 	}
 	devs, err := c.PlayerDevices(ctx)
 	if err != nil {
-		return nil, err
+		return nil, wrapAPI(err)
 	}
 	out := make([]Device, 0, len(devs))
 	for _, d := range devs {
@@ -318,7 +334,7 @@ func (s *Source) Activate(ctx context.Context) error {
 	}
 	devs, err := c.PlayerDevices(ctx)
 	if err != nil {
-		return err
+		return wrapAPI(err)
 	}
 	if len(devs) == 0 {
 		return ErrNoDevice
@@ -368,7 +384,7 @@ func (s *Source) Search(ctx context.Context, q string, limit int) ([]source.Trac
 	}
 	res, err := c.Search(ctx, q, spotify.SearchTypeTrack, spotify.Limit(limit), spotify.Market(spotify.MarketFromToken))
 	if err != nil {
-		return nil, err
+		return nil, wrapAPI(err)
 	}
 	if res.Tracks == nil {
 		return nil, nil
@@ -388,7 +404,7 @@ func (s *Source) Play(ctx context.Context, id string) error {
 	opts := s.playOpts()
 	opts.URIs = []spotify.URI{spotify.URI(trackURIPrefix + id)}
 	if err := c.PlayOpt(ctx, opts); err != nil {
-		return err
+		return wrapAPI(err)
 	}
 	s.mu.Lock()
 	s.current, s.armed = spotify.ID(id), false
@@ -401,7 +417,7 @@ func (s *Source) Pause(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.PauseOpt(ctx, s.playOpts())
+	return wrapAPI(c.PauseOpt(ctx, s.playOpts()))
 }
 
 func (s *Source) Resume(ctx context.Context) error {
@@ -409,7 +425,7 @@ func (s *Source) Resume(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.PlayOpt(ctx, s.playOpts())
+	return wrapAPI(c.PlayOpt(ctx, s.playOpts()))
 }
 
 func (s *Source) Stop(ctx context.Context) error {
@@ -425,7 +441,7 @@ func (s *Source) Seek(ctx context.Context, pos time.Duration) error {
 	if err != nil {
 		return err
 	}
-	return c.SeekOpt(ctx, int(pos.Milliseconds()), s.playOpts())
+	return wrapAPI(c.SeekOpt(ctx, int(pos.Milliseconds()), s.playOpts()))
 }
 
 func (s *Source) SetVolume(ctx context.Context, pct int) error {
@@ -433,7 +449,7 @@ func (s *Source) SetVolume(ctx context.Context, pct int) error {
 	if err != nil {
 		return err
 	}
-	return c.VolumeOpt(ctx, pct, s.playOpts())
+	return wrapAPI(c.VolumeOpt(ctx, pct, s.playOpts()))
 }
 
 func (s *Source) Status(ctx context.Context) (source.Playback, error) {
@@ -443,7 +459,7 @@ func (s *Source) Status(ctx context.Context) (source.Playback, error) {
 	}
 	cp, err := c.PlayerCurrentlyPlaying(ctx)
 	if err != nil {
-		return source.Playback{}, err
+		return source.Playback{}, wrapAPI(err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
