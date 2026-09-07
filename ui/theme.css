@@ -99,6 +99,17 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
+  /* Everything clickable shows a hand; disabled controls keep the default. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="switch"]:not([data-disabled]),
+  [role="slider"]:not([data-disabled]),
+  [role="tab"]:not([data-disabled]),
+  [role="option"]:not([data-disabled]),
+  a[href],
+  label[for] {
+    cursor: pointer;
+  }
 }
 
 /* Geist Mono uppercase section label, per DESIGN.md */
