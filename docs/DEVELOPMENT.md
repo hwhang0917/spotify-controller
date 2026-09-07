@@ -38,8 +38,11 @@ the [README](../README.md).
   off on activation because repeat-track would defeat end detection.
 - **YouTube is the official embedded player** (`internal/source/youtube`).
   Search and charts go through the Data API v3 with the host's key; playback
-  is the IFrame player inside the admin window, driven by Go through Wails
-  events (`yt:cmd`) and reported back through the `YouTubeReport` binding.
+  is the IFrame player in the admin window, framed from a loopback http page
+  Go serves (`player.html`) because YouTube refuses embeds without a Referer
+  (error 153) and the `wails://` origin on Linux/macOS sends none. Go drives
+  it through Wails events (`yt:cmd`), relayed to the frame as postMessage, and
+  state comes back through the `YouTubeReport` binding.
   No audio is fetched or decoded by vibe-music.
 - **Local files** (`internal/source/local`). Folder scan with a 4-way worker
   pool; tags via `dhowden/tag`, duration via the beep decoders (MP3 needs a

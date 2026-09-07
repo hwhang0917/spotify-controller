@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<!-- The official YouTube IFrame player, served by Go over loopback HTTP so the
+     embed request carries a Referer (YouTube error 153 without one; the
+     wails:// admin page on Linux/macOS sends none). The admin window frames
+     this page: commands arrive as postMessage, reports go back the same way. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #host { width: 100%; height: 100%; }
+  #blocked { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    border: 0; background: rgba(0,0,0,.6); color: #fff; font: 500 14px system-ui, sans-serif; cursor: pointer; }
+  #blocked.show { display: flex; }
+</style>
+</head>
+<body>
+<div id="host"></div>
+<button id="blocked"></button>
+<script>
+  const REPORT_MS = 500
+  const params = new URLSearchParams(location.search)
+  const blockedEl = document.getElementById('blocked')
+  blockedEl.textContent = params.get('blocked') || 'Click to start playback'
+  let player = null, ready = false, last = ''
+
+  function report() {
+    if (!player || !ready) return
+    const r = {
+      ready: true,
+      videoId: (player.getVideoData && player.getVideoData().video_id) || '',
+      state: player.getPlayerState(),
+      position: player.getCurrentTime() || 0,
+      duration: player.getDuration() || 0,
+    }
+    // -1 unstarted / 5 cued after a load means autoplay was refused
+    blockedEl.classList.toggle('show', r.videoId !== '' && (r.state === -1 || r.state === 5))
+    const key = JSON.stringify(r)
+    if (key !== last) { last = key; parent.postMessage(r, '*') }
+  }
+
+  // Autoplay refused: a real click here is a user gesture, which lifts the block.
+  blockedEl.onclick = () => player && player.playVideo()
+
+  window.addEventListener('message', (e) => {
+    if (e.source !== parent || !player) return
+    const c = e.data
+    switch (c.type) {
+      case 'load': player.loadVideoById(c.videoId); break
+      case 'play': player.playVideo(); break
+      case 'pause': player.pauseVideo(); break
+      case 'stop': player.stopVideo(); break
+      case 'seek': player.seekTo(c.seconds || 0, true); break
+      case 'volume': player.setVolume(c.volume == null ? 100 : c.volume); break
+    }
+  })
+
+  window.onYouTubeIframeAPIReady = () => {
+    player = new YT.Player('host', {
+      width: '100%', height: '100%',
+      playerVars: { autoplay: 0, controls: 1, rel: 0, modestbranding: 1, playsinline: 1 },
+      events: { onReady: () => { ready = true; report() }, onStateChange: report },
+    })
+    setInterval(report, REPORT_MS)
+  }
+  const s = document.createElement('script')
+  s.src = 'https://www.youtube.com/iframe_api'
+  document.head.appendChild(s)
+</script>
+</body>
+</html>

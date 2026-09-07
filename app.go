@@ -136,6 +136,7 @@ type App struct {
 	db      *store.Store
 	srv     *http.Server
 	url     string
+	ytURL   string // loopback page framing the YouTube player (see youtube.ServePlayer)
 	player  *player.Player
 	guests  *server.Guests
 	local   *local.Source
@@ -236,6 +237,9 @@ func (a *App) startup(ctx context.Context) {
 		APIKey: ytKey,
 		Send:   func(c youtube.Command) { runtime.EventsEmit(a.ctx, youtubeEvent, c) },
 	})
+	if a.ytURL, err = youtube.ServePlayer(); err != nil {
+		log.Println("youtube player:", err)
+	}
 	a.player = player.New(player.Options{
 		Sources:   []source.Source{a.local, a.spotify, a.youtube},
 		SkipRatio: cfg.SkipRatio,
@@ -632,6 +636,9 @@ func (a *App) YouTubeTest(region string) (string, error) {
 
 // YouTubeReport receives the embedded player's state from the admin page.
 func (a *App) YouTubeReport(r youtube.Report) { a.youtube.Report(r) }
+
+// YouTubePlayerURL is the loopback page the admin window frames for playback.
+func (a *App) YouTubePlayerURL() string { return a.ytURL }
 
 // ResetPlayHistory clears the "most played" lists for every source.
 func (a *App) ResetPlayHistory() error {

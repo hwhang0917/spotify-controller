@@ -316,9 +316,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
           <CardContent class="p-0">
             <div class="flex flex-col" :class="playingSource === 'youtube' ? '' : 'sm:flex-row'">
               <!-- mounted whenever YouTube is on so it is ready before its first track; visible only while one plays -->
-              <YouTubePlayer v-if="youtubeEnabled" v-show="playingSource === 'youtube'">
-                <template #blocked>{{ t('youtube.blocked') }}</template>
-              </YouTubePlayer>
+              <YouTubePlayer v-if="youtubeEnabled" v-show="playingSource === 'youtube'" :blocked-label="t('youtube.blocked')" />
               <Artwork v-if="playingSource !== 'youtube'" :src="np?.track.artworkUrl?.startsWith('http') ? np.track.artworkUrl : undefined" class="aspect-square w-full sm:w-56 rounded-none" />
               <div class="flex flex-1 flex-col justify-between gap-4 px-6 py-5">
                 <div class="space-y-1">
