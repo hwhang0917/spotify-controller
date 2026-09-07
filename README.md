@@ -108,10 +108,26 @@ internal/source/fake/      in-memory source for tests
 internal/player/           queue, votes, skip threshold, poll loop, state fan-out
 internal/config/           config.json in the user config dir
 internal/server/           Chi: guest cookie + name, /api/*, SSE, SPA fallback
-ui/theme.css               DESIGN.md tokens as a Tailwind v4 theme
-frontend/                  admin UI (Vue + Vite + Tailwind), embedded by Wails
-web/                       guest UI (Vue + Vite + Tailwind), embedded via web/embed.go
+ui/theme.css               DESIGN.md tokens mapped onto shadcn-vue's CSS variables
+ui/i18n.ts                 framework-free EN/KO lookup shared by both UIs
+frontend/                  admin UI (Vue + Vite + Tailwind + shadcn-vue), embedded by Wails
+web/                       guest UI (Vue + Vite + Tailwind + shadcn-vue), embedded via web/embed.go
 ```
+
+### UI stack
+
+Both apps use [shadcn-vue](https://www.shadcn-vue.com/) components copied into
+`src/components/ui/` (reka-ui primitives, Tailwind v4, lucide icons). Add more with
+
+```sh
+cd web && npx shadcn-vue@latest add dialog   # or frontend/
+```
+
+The theme in `ui/theme.css` maps DESIGN.md's Geist tokens onto shadcn's
+variables, so components pick up the ink/hairline look without per-component
+overrides. TypeScript is pinned to 5.x in both apps: Vue's SFC compiler needs
+the TS 5 JavaScript API to resolve the imported prop types shadcn components
+use, and the TypeScript 7 package does not ship it.
 
 ### Adding a source
 

@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import SpotifyMark from './SpotifyMark.vue'
+import { ChevronUp, Plus, Search, Users } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
+import NowPlaying from './NowPlaying.vue'
+import TrackRow from './TrackRow.vue'
 import LocaleToggle from './LocaleToggle.vue'
 import { t, tError } from './i18n'
 import type { State, Track } from './types'
-import { fmtDuration, NS_PER_MS } from './types'
 
 const SEARCH_DEBOUNCE_MS = 300
 
@@ -15,7 +23,6 @@ const query = ref('')
 const results = ref<Track[]>([])
 const searching = ref(false)
 const error = ref('')
-const now = ref(Date.now())
 const connected = ref(false)
 const blocked = ref(false)
 
@@ -69,21 +76,9 @@ const request = (tr: Track) => act(async () => {
 const vote = (id: string) => act(() => api('POST', `/api/queue/${id}/vote`))
 const voteSkip = () => act(() => api('POST', '/api/skip'))
 
-// Position interpolates from the last frame; the server only pushes on change.
-const position = computed(() => {
-  const np = state.value?.nowPlaying
-  if (!np) return 0
-  const base = np.position / NS_PER_MS
-  return np.playing ? base + (now.value - new Date(np.at).getTime()) : base
-})
-const progressPct = computed(() => {
-  const d = state.value?.nowPlaying?.track.duration
-  return d ? Math.min(100, (position.value * NS_PER_MS / d) * 100) : 0
-})
 const isSpotify = computed(() => state.value?.source?.id === 'spotify')
 
 let es: EventSource | null = null
-let tick: number | undefined
 onMounted(async () => {
   await act(async () => {
     const me = await api<{ name: string }>('GET', '/api/me')
@@ -98,115 +93,111 @@ onMounted(async () => {
     // A kick just reconnects; a block shows up as 403 on the next probe.
     act(() => api('GET', '/api/me'))
   }
-  tick = window.setInterval(() => { now.value = Date.now() }, 1000)
 })
-onUnmounted(() => { es?.close(); window.clearInterval(tick) })
+onUnmounted(() => es?.close())
 </script>
 
 <template>
   <!-- blocked -->
   <main v-if="blocked" class="min-h-screen flex items-center justify-center p-6">
-    <section class="card w-full max-w-sm space-y-3">
-      <p class="eyebrow">vibe-music</p>
-      <h1 class="text-xl font-semibold tracking-tight">{{ t('blocked.title') }}</h1>
-      <p class="text-sm text-body">{{ t('blocked.body') }}</p>
-    </section>
+    <Card class="w-full max-w-sm">
+      <CardHeader>
+        <p class="eyebrow">vibe-music</p>
+        <CardTitle class="text-xl">{{ t('blocked.title') }}</CardTitle>
+      </CardHeader>
+      <CardContent class="text-sm text-body">{{ t('blocked.body') }}</CardContent>
+    </Card>
   </main>
 
   <!-- name gate -->
   <main v-else-if="!name" class="min-h-screen flex items-center justify-center p-6">
-    <form class="card w-full max-w-sm space-y-4" @submit.prevent="saveName">
-      <div class="flex items-center justify-between">
+    <Card class="w-full max-w-sm">
+      <CardHeader class="flex-row items-center justify-between">
         <p class="eyebrow">vibe-music</p>
         <LocaleToggle />
-      </div>
-      <h1 class="text-2xl font-semibold tracking-tight">{{ t('gate.title') }}</h1>
-      <input v-model="nameInput" class="input" :placeholder="t('gate.placeholder')" maxlength="24" autofocus />
-      <button class="btn-primary w-full" :disabled="!nameInput.trim()">{{ t('gate.join') }}</button>
-      <p v-if="error" class="text-sm text-error">{{ error }}</p>
-    </form>
+      </CardHeader>
+      <CardContent>
+        <form class="space-y-4" @submit.prevent="saveName">
+          <h1 class="text-2xl font-semibold tracking-tight">{{ t('gate.title') }}</h1>
+          <Input v-model="nameInput" :placeholder="t('gate.placeholder')" maxlength="24" autofocus />
+          <Button type="submit" class="w-full" :disabled="!nameInput.trim()">{{ t('gate.join') }}</Button>
+          <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+        </form>
+      </CardContent>
+    </Card>
   </main>
 
-  <main v-else class="min-h-screen p-4 sm:p-8 space-y-4 max-w-2xl mx-auto">
+  <!-- player -->
+  <main v-else class="min-h-screen mx-auto max-w-3xl space-y-4 p-4 sm:p-8">
     <header class="flex items-center justify-between">
       <div>
         <p class="eyebrow">vibe-music</p>
         <h1 class="text-xl font-semibold tracking-tight">{{ t('header.hi', { name }) }}</h1>
       </div>
-      <div class="flex items-center gap-4 text-xs text-mute">
-        <span><span :class="connected ? 'text-link' : 'text-error'">●</span> {{ t('header.here', { n: state?.guests ?? 0 }) }}</span>
+      <div class="flex items-center gap-2">
+        <Badge variant="outline" class="gap-1.5">
+          <span class="size-1.5 rounded-full" :class="connected ? 'bg-link' : 'bg-destructive'" />
+          <Users />
+          {{ t('header.here', { n: state?.guests ?? 0 }) }}
+        </Badge>
         <LocaleToggle />
       </div>
     </header>
-    <p v-if="error" class="text-sm text-error">{{ error }}</p>
+    <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
 
-    <!-- now playing -->
-    <section class="card space-y-4">
-      <p class="eyebrow">{{ t('now.eyebrow') }}<span v-if="state?.source"> · {{ state.source.name }}</span></p>
-      <div v-if="state?.nowPlaying" class="space-y-4">
-        <div class="flex gap-4">
-          <img v-if="state.nowPlaying.track.artworkUrl" :src="state.nowPlaying.track.artworkUrl" class="w-24 h-24 rounded-sm object-cover shrink-0" alt="" />
-          <div v-else class="w-24 h-24 rounded-sm bg-hairline-soft shrink-0" />
-          <div class="min-w-0 flex-1">
-            <p class="text-lg font-semibold tracking-tight truncate">{{ state.nowPlaying.track.title }}</p>
-            <p class="text-sm text-body truncate">{{ state.nowPlaying.track.artist || '—' }}</p>
-            <p v-if="state.nowPlaying.requestedBy" class="text-xs text-mute mt-1">{{ t('now.requestedBy', { name: state.nowPlaying.requestedBy }) }}</p>
-            <SpotifyMark v-if="state.nowPlaying.track.externalUrl" :href="state.nowPlaying.track.externalUrl" class="mt-2" />
-          </div>
-        </div>
-        <div>
-          <div class="h-1 rounded-full bg-hairline overflow-hidden">
-            <div class="h-full bg-ink transition-[width]" :style="{ width: progressPct + '%' }" />
-          </div>
-          <div class="flex justify-between font-mono text-xs text-mute mt-1">
-            <span>{{ fmtDuration(position * NS_PER_MS) }}</span>
-            <span>{{ state.nowPlaying.playing ? '' : t('now.paused') + ' · ' }}{{ fmtDuration(state.nowPlaying.track.duration) }}</span>
-          </div>
-        </div>
-        <button class="btn-ghost w-full" @click="voteSkip">
-          {{ t('now.skip', { v: state.skipVotes, t: state.skipThreshold }) }}
-        </button>
-      </div>
-      <p v-else class="text-sm text-mute">{{ t('now.empty') }}</p>
-    </section>
+    <NowPlaying :state="state" @skip="voteSkip" />
 
-    <!-- search -->
-    <section class="card space-y-3">
-      <p class="eyebrow">{{ t('search.eyebrow') }}</p>
-      <input v-model="query" class="input" :placeholder="t('search.placeholder')" @input="onQuery" />
-      <ul v-if="results.length" class="divide-y divide-hairline">
-        <li v-for="tr in results" :key="tr.id" class="py-2 flex items-center gap-3">
-          <img v-if="tr.artworkUrl" :src="tr.artworkUrl" class="w-10 h-10 rounded-sm object-cover shrink-0" alt="" />
-          <div v-else class="w-10 h-10 rounded-sm bg-hairline-soft shrink-0" />
-          <div class="min-w-0 flex-1">
-            <p class="text-sm font-medium truncate">{{ tr.title }}</p>
-            <p class="text-xs text-body truncate">{{ tr.artist }}<span v-if="tr.album"> · {{ tr.album }}</span></p>
-            <SpotifyMark v-if="tr.externalUrl" :href="tr.externalUrl" />
+    <div class="grid gap-4 md:grid-cols-2">
+      <!-- search -->
+      <Card>
+        <CardHeader>
+          <p class="eyebrow">{{ t('search.eyebrow') }}</p>
+          <div class="relative">
+            <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input v-model="query" class="pl-8" :placeholder="t('search.placeholder')" @input="onQuery" />
           </div>
-          <span class="font-mono text-xs text-mute">{{ fmtDuration(tr.duration) }}</span>
-          <button class="btn-primary" @click="request(tr)">{{ t('search.request') }}</button>
-        </li>
-      </ul>
-      <p v-else-if="query && !searching" class="text-sm text-mute">{{ t('search.empty') }}</p>
-    </section>
-
-    <!-- queue -->
-    <section class="card space-y-3">
-      <p class="eyebrow">{{ t('queue.eyebrow', { n: state?.queue.length ?? 0 }) }}</p>
-      <ol v-if="state?.queue.length" class="divide-y divide-hairline">
-        <li v-for="(it, i) in state.queue" :key="it.id" class="py-2 flex items-center gap-3">
-          <span class="font-mono text-xs text-mute w-5">{{ i + 1 }}</span>
-          <div class="min-w-0 flex-1">
-            <p class="text-sm font-medium truncate">{{ it.track.title }}</p>
-            <p class="text-xs text-body truncate">{{ it.track.artist }} · {{ it.requestedBy }}</p>
-            <SpotifyMark v-if="it.track.externalUrl" :href="it.track.externalUrl" />
+        </CardHeader>
+        <CardContent>
+          <div v-if="searching" class="space-y-3">
+            <div v-for="i in 3" :key="i" class="flex items-center gap-3">
+              <Skeleton class="size-11 rounded-md" />
+              <div class="flex-1 space-y-2"><Skeleton class="h-3 w-2/3" /><Skeleton class="h-3 w-1/3" /></div>
+            </div>
           </div>
-          <button class="btn-ghost font-mono" @click="vote(it.id)">▲ {{ it.votes }}</button>
-        </li>
-      </ol>
-      <p v-else class="text-sm text-mute">{{ t('queue.empty') }}</p>
-    </section>
+          <ScrollArea v-else-if="results.length" class="max-h-96">
+            <div class="divide-y">
+              <TrackRow v-for="tr in results" :key="tr.id" :track="tr" :subtitle="tr.album">
+                <Button size="sm" @click="request(tr)"><Plus />{{ t('search.request') }}</Button>
+              </TrackRow>
+            </div>
+          </ScrollArea>
+          <p v-else class="text-sm text-muted-foreground">{{ query ? t('search.empty') : t('search.hint') }}</p>
+        </CardContent>
+      </Card>
 
-    <footer v-if="isSpotify" class="text-xs text-mute text-center pb-4">{{ t('spotify.footer') }}</footer>
+      <!-- queue -->
+      <Card>
+        <CardHeader>
+          <p class="eyebrow">{{ t('queue.eyebrow', { n: state?.queue.length ?? 0 }) }}</p>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea v-if="state?.queue.length" class="max-h-96">
+            <div class="divide-y">
+              <TrackRow v-for="(it, i) in state.queue" :key="it.id" :track="it.track" :index="i + 1" :subtitle="it.requestedBy">
+                <Button variant="outline" size="sm" class="font-mono tabular-nums" @click="vote(it.id)">
+                  <ChevronUp />{{ it.votes }}
+                </Button>
+              </TrackRow>
+            </div>
+          </ScrollArea>
+          <p v-else class="text-sm text-muted-foreground">{{ t('queue.empty') }}</p>
+        </CardContent>
+      </Card>
+    </div>
+
+    <template v-if="isSpotify">
+      <Separator />
+      <footer class="pb-4 text-center text-xs text-muted-foreground">{{ t('spotify.footer') }}</footer>
+    </template>
   </main>
 </template>

@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { Button } from '@/components/ui/button'
 import { locale, setLocale } from './i18n'
 </script>
 
 <template>
-  <button class="font-mono text-xs text-mute hover:text-ink" @click="setLocale(locale === 'en' ? 'ko' : 'en')" :aria-label="locale === 'en' ? '한국어' : 'English'">
+  <Button variant="ghost" size="xs" class="font-mono text-muted-foreground" @click="setLocale(locale === 'en' ? 'ko' : 'en')">
     {{ locale === 'en' ? 'KO' : 'EN' }}
-  </button>
+  </Button>
 </template>

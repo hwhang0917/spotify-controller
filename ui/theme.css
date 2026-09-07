@@ -1,57 +1,107 @@
-/* DESIGN.md tokens (Geist system) as Tailwind v4 theme. Imported by frontend/ and web/. */
-@theme {
-  --color-canvas: #fafafa;
-  --color-canvas-elevated: #ffffff;
-  --color-hairline-soft: #f2f2f2;
-  --color-hairline: #ebebeb;
-  --color-ink: #171717;
-  --color-body: #4d4d4d;
-  --color-mute: #8f8f8f;
-  --color-faint: #a1a1a1;
-  --color-link: #0070f3;
-  --color-link-deep: #0761d1;
-  --color-link-soft: #d3e5ff;
-  --color-error: #ee0000;
-  --color-error-deep: #c50000;
-  --color-warning: #f5a623;
-  --color-spotify: #1ed760;
+/* DESIGN.md (Geist system) mapped onto shadcn-vue's CSS variables.
+   Imported by frontend/src/style.css and web/src/style.css. */
+@import "tw-animate-css";
+@import "shadcn-vue/tailwind.css";
 
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* surfaces */
+  --background: #fafafa;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  /* ink primary, hairline-soft secondary */
+  --primary: #171717;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f2f2;
+  --secondary-foreground: #171717;
+  --muted: #f2f2f2;
+  --muted-foreground: #8f8f8f;
+  --accent: #f2f2f2;
+  --accent-foreground: #171717;
+  --destructive: #ee0000;
+  --border: #ebebeb;
+  --input: #ebebeb;
+  --ring: #171717;
+  /* 6px app radius per DESIGN.md */
+  --radius: 6px;
+  --chart-1: #0070f3;
+  --chart-2: #7928ca;
+  --chart-3: #50e3c2;
+  --chart-4: #ff0080;
+  --chart-5: #f5a623;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #171717;
+  --sidebar-primary: #171717;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f2f2f2;
+  --sidebar-accent-foreground: #171717;
+  --sidebar-border: #ebebeb;
+  --sidebar-ring: #171717;
+}
+
+@theme inline {
   --font-sans: "Geist Sans", Inter, Arial, sans-serif;
   --font-mono: "Geist Mono", "JetBrains Mono", monospace;
+  --font-heading: var(--font-sans);
 
-  --radius-sm: 6px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-pill: 100px;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 
-  --shadow-whisper: 0px 1px 1px rgba(0, 0, 0, 0.04);
-  --shadow-floating: 0px 2px 2px rgba(0, 0, 0, 0.04), 0px 8px 16px -4px rgba(0, 0, 0, 0.08);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* DESIGN.md extras not covered by shadcn's set */
+  --color-link: #0070f3;
+  --color-spotify: #1ed760;
+  --color-body: #4d4d4d;
+  --color-faint: #a1a1a1;
 }
 
 @layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
   body {
-    @apply bg-canvas text-ink font-sans antialiased;
+    @apply bg-background text-foreground font-sans antialiased;
   }
 }
 
-/* Reusable pieces shared by admin and guest UIs */
-@utility card {
-  @apply bg-canvas-elevated border border-hairline rounded-md p-6;
-}
+/* Geist Mono uppercase section label, per DESIGN.md */
 @utility eyebrow {
-  @apply font-mono text-xs font-medium uppercase tracking-normal text-mute;
-}
-@utility btn {
-  @apply inline-flex items-center justify-center h-9 px-3 rounded-sm text-sm font-medium
-    disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
-}
-@utility btn-primary {
-  @apply btn bg-ink text-white hover:bg-body;
-}
-@utility btn-ghost {
-  @apply btn bg-canvas-elevated text-ink border border-hairline hover:bg-hairline-soft;
-}
-@utility input {
-  @apply h-9 w-full rounded-sm border border-hairline bg-canvas-elevated px-3 text-sm text-ink
-    placeholder:text-faint focus:outline-none focus:border-ink disabled:opacity-50;
+  @apply font-mono text-xs font-medium uppercase text-muted-foreground;
 }

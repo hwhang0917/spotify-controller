@@ -6,8 +6,22 @@
     "strict": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "lib": ["ESNext", "DOM"],
-    "types": ["vite/client"]
+    "lib": [
+      "ESNext",
+      "DOM"
+    ],
+    "types": [
+      "vite/client"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
   },
-  "include": ["src/**/*.ts", "src/**/*.vue"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.vue"
+  ]
 }
