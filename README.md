@@ -80,19 +80,22 @@ Config lives at `$XDG_CONFIG_HOME/vibe-music/config.json` (Linux),
 ## Develop
 
 ```sh
-wails dev                 # admin window with hot reload
-cd web && npm run dev     # guest UI on :5173, proxies /api to the guest server
-go test ./...
+make install     # Go modules, Wails CLI, both frontends
+make dev         # admin window with hot reload
+make dev-web     # guest UI on :5173, proxies /api to the guest server
+make test
+make lint        # gofmt + go vet
 ```
 
 ## Build
 
 ```sh
-wails build               # both UIs, embedded, output in build/bin/
+make build           # this machine: both UIs embedded, output in build/bin/
+make build-windows   # CGO-free Windows .exe from any OS
 ```
 
-`wails.json` chains the guest UI build into `frontend:build`, so one
-`wails build` produces the whole binary.
+`make help` lists every target. `wails.json` chains the guest UI build into
+`frontend:build`, so `wails build` alone also produces the whole binary.
 
 ## Layout
 
