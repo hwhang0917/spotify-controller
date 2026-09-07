@@ -19,23 +19,23 @@ const stepKeys = Array.from({ length: props.steps }, (_, i) => i + 1)
         <CircleQuestionMark class="size-4" />
       </button>
     </DialogTrigger>
-    <DialogContent class="max-w-lg">
+    <DialogContent class="max-h-[85vh] w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-2xl">
       <DialogHeader>
         <DialogTitle>{{ t(`${prefix}.title`) }}</DialogTitle>
-        <DialogDescription>{{ t(`${prefix}.intro`) }}</DialogDescription>
+        <DialogDescription class="break-keep text-base leading-relaxed">{{ t(`${prefix}.intro`) }}</DialogDescription>
       </DialogHeader>
-      <ol class="space-y-3 text-sm">
+      <ol class="space-y-4 text-base leading-relaxed">
         <li v-for="n in stepKeys" :key="n" class="flex gap-3">
           <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary font-mono text-xs text-primary-foreground">{{ n }}</span>
           <div class="min-w-0 flex-1 space-y-1.5 pt-0.5">
-            <p class="whitespace-pre-line">{{ t(`${prefix}.step${n}`) }}</p>
-            <Button v-if="links?.[n]" variant="outline" size="xs" @click="BrowserOpenURL(links[n])">
-              <ExternalLink />{{ links[n].replace(/^https?:\/\//, '') }}
+            <p class="whitespace-pre-line break-keep">{{ t(`${prefix}.step${n}`) }}</p>
+            <Button v-if="links?.[n]" variant="outline" size="sm" class="max-w-full" @click="BrowserOpenURL(links[n])">
+              <ExternalLink /><span class="truncate">{{ links[n].replace(/^https?:\/\//, '') }}</span>
             </Button>
           </div>
         </li>
       </ol>
-      <p v-if="note" class="rounded-md border bg-muted px-3 py-2 text-xs text-muted-foreground">{{ t(note) }}</p>
+      <p v-if="note" class="break-keep rounded-md border bg-muted px-4 py-3 text-sm leading-relaxed text-muted-foreground">{{ t(note) }}</p>
     </DialogContent>
   </Dialog>
 </template>
