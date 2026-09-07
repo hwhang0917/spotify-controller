@@ -529,11 +529,11 @@ func (p *Player) advance(ctx context.Context) {
 		return
 	}
 	head := p.queue[0]
-	p.queue = p.queue[1:]
 	if err := p.active.Play(ctx, head.Track.ID); err != nil {
-		log.Println("player: play:", err)
+		log.Println("player: play:", err) // head stays queued; the next tick retries
 		return
 	}
+	p.queue = p.queue[1:]
 	p.lastPlay = time.Now()
 	p.requester = head.RequestedByName
 	p.now = source.Playback{Track: &head.Track, Playing: true, At: p.lastPlay}

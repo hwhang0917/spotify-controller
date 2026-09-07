@@ -6,6 +6,7 @@ export interface Config {
   inviteOnly: boolean
   local: { folders: string[] }
   spotify: { clientId: string; deviceId?: string }
+  youtube: { hasKey: boolean }
 }
 
 export interface SourceStatus {

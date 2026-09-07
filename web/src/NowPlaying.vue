@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import Artwork from './Artwork.vue'
-import SpotifyMark from './SpotifyMark.vue'
+import SourceLink from './SourceLink.vue'
 import { t } from './i18n'
 import type { State } from './types'
 import { fmtDuration, NS_PER_MS } from './types'
@@ -50,7 +50,7 @@ const pct = computed(() => {
             <div class="flex flex-wrap items-center gap-2 pt-1">
               <Badge v-if="np.requestedBy" variant="secondary">{{ t('now.requestedBy', { name: np.requestedBy }) }}</Badge>
               <Badge v-if="!np.playing" variant="outline">{{ t('now.paused') }}</Badge>
-              <SpotifyMark v-if="np.track.externalUrl" :href="np.track.externalUrl" />
+              <SourceLink v-if="np.track.externalUrl" :href="np.track.externalUrl" />
             </div>
           </div>
 

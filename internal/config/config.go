@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/oauth2"
 )
@@ -22,6 +23,7 @@ const (
 	appDirName       = "vibe-music"
 	DBFile           = "vibe-music.db"
 	tokenFile        = "spotify-token.json"
+	youtubeKeyFile   = "youtube-api-key"
 	settingsKey      = "config"
 )
 
@@ -32,6 +34,12 @@ type Config struct {
 	InviteOnly   bool    `json:"inviteOnly"`
 	Local        Local   `json:"local"`
 	Spotify      Spotify `json:"spotify"`
+	// YouTube.HasKey is derived at read time; the key itself is in its own file.
+	YouTube YouTube `json:"youtube"`
+}
+
+type YouTube struct {
+	HasKey bool `json:"hasKey"`
 }
 
 type Local struct {
@@ -146,4 +154,34 @@ func SaveToken(tok *oauth2.Token) error {
 		return err
 	}
 	return os.Rename(tmp, p)
+}
+
+// LoadYouTubeKey returns "" when none is stored.
+func LoadYouTubeKey() (string, error) {
+	dir, err := Dir()
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(filepath.Join(dir, youtubeKeyFile))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	return strings.TrimSpace(string(data)), err
+}
+
+// SaveYouTubeKey writes the key 0600; an empty key removes the file.
+func SaveYouTubeKey(key string) error {
+	dir, err := Dir()
+	if err != nil {
+		return err
+	}
+	p := filepath.Join(dir, youtubeKeyFile)
+	if strings.TrimSpace(key) == "" {
+		err := os.Remove(p)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	return os.WriteFile(p, []byte(strings.TrimSpace(key)), 0o600)
 }

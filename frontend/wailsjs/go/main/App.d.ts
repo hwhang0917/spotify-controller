@@ -29,3 +29,5 @@ export function AdmitGuest(arg1: string): Promise<void>;
 export function CreateInvitation(arg1: number): Promise<any>;
 export function Invitations(): Promise<any[]>;
 export function RevokeInvitation(arg1: number): Promise<void>;
+export function YouTubeReport(arg1: any): Promise<void>;
+export function SetYouTubeAPIKey(arg1: string): Promise<void>;

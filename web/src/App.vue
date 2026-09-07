@@ -127,6 +127,7 @@ const remove = (id: string) => act(async () => { await api('DELETE', `/api/queue
 const voteSkip = () => act(async () => { await api('POST', '/api/skip'); return t('toast.skipVoted') })
 
 const isSpotify = computed(() => state.value?.source?.id === 'spotify')
+const isYouTube = computed(() => state.value?.source?.id === 'youtube')
 
 let es: EventSource | null = null
 onMounted(async () => {
@@ -289,9 +290,9 @@ onUnmounted(() => { es?.close(); window.clearInterval(health) })
       </Card>
     </div>
 
-    <template v-if="isSpotify">
+    <template v-if="isSpotify || isYouTube">
       <Separator />
-      <footer class="pb-4 text-center text-xs text-muted-foreground">{{ t('spotify.footer') }}</footer>
+      <footer class="pb-4 text-center text-xs text-muted-foreground">{{ t(isYouTube ? 'youtube.footer' : 'spotify.footer') }}</footer>
     </template>
   </main>
 </template>

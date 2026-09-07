@@ -22,6 +22,7 @@ import (
 	"github.com/hwhang0917/vibe-music/internal/source"
 	"github.com/hwhang0917/vibe-music/internal/source/local"
 	"github.com/hwhang0917/vibe-music/internal/source/spotify"
+	"github.com/hwhang0917/vibe-music/internal/source/youtube"
 	"github.com/hwhang0917/vibe-music/internal/store"
 	"github.com/hwhang0917/vibe-music/web"
 )
@@ -31,8 +32,9 @@ const shutdownTimeout = 5 * time.Second
 
 // Wails event names the admin UI listens on.
 const (
-	stateEvent  = "state"
-	guestsEvent = "guests"
+	stateEvent   = "state"
+	guestsEvent  = "guests"
+	youtubeEvent = "yt:cmd" // commands for the embedded YouTube player
 )
 
 // UI error codes. The admin UI translates "code: detail"; unknown text is
@@ -47,6 +49,9 @@ const (
 	errSpotifyNoID   = "spotify_client_id"
 	errSpotifyNoDev  = "spotify_no_device"
 	errSpotifyLogin  = "spotify_login_timeout"
+	errYouTubeKey    = "youtube_api_key"
+	errYouTubeQuota  = "youtube_quota"
+	errYouTubePlayer = "youtube_player"
 )
 
 // Winsock reports its own errno values; Go's syscall.EADDRINUSE/EACCES are
@@ -96,6 +101,12 @@ func uiError(err error) error {
 		return codeErr(errSpotifyLogin, "")
 	case errors.Is(err, local.ErrAudioOutput):
 		return codeErr(errAudioOutput, err.Error())
+	case errors.Is(err, youtube.ErrNoAPIKey):
+		return codeErr(errYouTubeKey, "")
+	case errors.Is(err, youtube.ErrQuotaExceeded):
+		return codeErr(errYouTubeQuota, "")
+	case errors.Is(err, youtube.ErrPlayerNotReady):
+		return codeErr(errYouTubePlayer, "")
 	}
 	return err
 }
@@ -113,6 +124,7 @@ type App struct {
 	guests  *server.Guests
 	local   *local.Source
 	spotify *spotify.Source
+	youtube *youtube.Source
 	cancel  context.CancelFunc
 }
 
@@ -162,8 +174,16 @@ func (a *App) startup(ctx context.Context) {
 		SaveToken:   a.saveSpotifyToken,
 		OpenBrowser: func(u string) error { runtime.BrowserOpenURL(ctx, u); return nil },
 	})
+	ytKey, err := config.LoadYouTubeKey()
+	if err != nil {
+		log.Println("youtube key:", err)
+	}
+	a.youtube = youtube.New(youtube.Options{
+		APIKey: ytKey,
+		Send:   func(c youtube.Command) { runtime.EventsEmit(a.ctx, youtubeEvent, c) },
+	})
 	a.player = player.New(player.Options{
-		Sources:   []source.Source{a.local, a.spotify},
+		Sources:   []source.Source{a.local, a.spotify, a.youtube},
 		SkipRatio: cfg.SkipRatio,
 	})
 	a.player.SetPersister(func(items []player.PersistedItem) {
@@ -287,7 +307,9 @@ func (a *App) saveConfig() error {
 func (a *App) GetConfig() config.Config {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.cfg
+	c := a.cfg
+	c.YouTube.HasKey = a.youtube.HasAPIKey()
+	return c
 }
 
 // SaveConfig persists and applies settings. Changing the Spotify Client ID
@@ -328,6 +350,13 @@ func (a *App) Sources() []SourceStatus {
 				st.Detail = "connected"
 			} else {
 				st.Detail = "not connected"
+			}
+		case a.youtube.ID():
+			st.Ready = a.youtube.HasAPIKey()
+			if st.Ready {
+				st.Detail = "API key set"
+			} else {
+				st.Detail = "API key needed"
 			}
 		}
 		out = append(out, st)
@@ -425,6 +454,20 @@ func (a *App) MoveQueueItem(id string, index int) error { return a.player.Move(i
 func (a *App) Seek(ms int) error {
 	return uiError(a.player.Seek(a.ctx, time.Duration(ms)*time.Millisecond))
 }
+
+// --- youtube ---
+
+// SetYouTubeAPIKey stores the Data API key (empty removes it).
+func (a *App) SetYouTubeAPIKey(key string) error {
+	if err := config.SaveYouTubeKey(key); err != nil {
+		return err
+	}
+	a.youtube.SetAPIKey(key)
+	return nil
+}
+
+// YouTubeReport receives the embedded player's state from the admin page.
+func (a *App) YouTubeReport(r youtube.Report) { a.youtube.Report(r) }
 
 // --- playback (admin override) ---
 

@@ -17,6 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import Artwork from './Artwork.vue'
 import SpotifyIcon from './SpotifyIcon.vue'
+import YouTubePlayer from './YouTubePlayer.vue'
+import YouTubeIcon from './YouTubeIcon.vue'
 import { toast } from 'vue-sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { locale, setLocale, t, tError } from './i18n'
@@ -126,6 +128,14 @@ const onSeekCommit = (v: number[] | undefined) => {
 }
 const kick = (id: string) => run('kick', async () => { await api.KickGuest(id); return t('toast.guestKicked') })
 const removeGuest = (id: string) => run('remove', async () => { await api.RemoveGuest(id); return t('toast.guestRemoved') })
+const youtubeKey = ref('')
+const saveYouTubeKey = () => run('yt-key', async () => {
+  await api.SetYouTubeAPIKey(youtubeKey.value)
+  const had = youtubeKey.value.trim() !== ''
+  youtubeKey.value = ''
+  return t(had ? 'toast.youtubeKeySaved' : 'toast.youtubeKeyCleared')
+})
+const isYouTube = computed(() => state.value?.source?.id === 'youtube')
 const setInviteOnly = (on: boolean) => run('invite-only', async () => { await api.SetInviteOnly(on); return t(on ? 'toast.inviteOn' : 'toast.inviteOff') })
 const admit = (id: string) => run('admit', async () => { await api.AdmitGuest(id); return t('toast.guestAdmitted') })
 const createInvitation = () => run('invite', async () => {
@@ -218,8 +228,11 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
         <!-- Player -->
         <Card class="overflow-hidden self-start">
           <CardContent class="p-0">
-            <div class="flex flex-col sm:flex-row">
-              <Artwork :src="np?.track.artworkUrl?.startsWith('http') ? np.track.artworkUrl : undefined" class="aspect-square w-full sm:w-64 rounded-none" />
+            <div class="flex flex-col" :class="isYouTube ? '' : 'sm:flex-row'">
+              <YouTubePlayer v-if="isYouTube">
+                <template #blocked>{{ t('youtube.blocked') }}</template>
+              </YouTubePlayer>
+              <Artwork v-else :src="np?.track.artworkUrl?.startsWith('http') ? np.track.artworkUrl : undefined" class="aspect-square w-full sm:w-64 rounded-none" />
               <div class="flex flex-1 flex-col justify-between gap-5 px-8 py-6">
                 <div class="space-y-1">
                   <p class="eyebrow">{{ t('now') }}<span v-if="state?.source"> · {{ state.source.name }}</span></p>
@@ -397,7 +410,7 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
               >
                 <div class="flex items-center justify-between">
                   <span class="flex items-center gap-2 font-medium">
-                    <SpotifyIcon v-if="s.id === 'spotify'" /><FolderOpen v-else class="size-4 text-muted-foreground" />{{ s.name }}
+                    <SpotifyIcon v-if="s.id === 'spotify'" /><YouTubeIcon v-else-if="s.id === 'youtube'" /><FolderOpen v-else class="size-4 text-muted-foreground" />{{ s.name }}
                   </span>
                   <Badge :variant="s.active ? 'default' : s.ready ? 'secondary' : 'outline'">
                     {{ s.active ? t('source.active') : s.ready ? t('source.ready') : t('source.setup') }}
@@ -460,6 +473,26 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
                 <p class="text-xs text-muted-foreground">
                   {{ t('spotify.redirect') }} <span class="select-all font-mono text-foreground">http://127.0.0.1/callback</span>
                 </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle class="flex items-center gap-2"><YouTubeIcon />{{ t('youtube.title') }}</CardTitle>
+                <CardDescription>{{ t('youtube.desc') }}</CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-3">
+                <div class="space-y-2">
+                  <Label for="ytKey">{{ t('youtube.apiKey') }} <span class="text-muted-foreground">{{ t('youtube.apiKeyHint') }}</span></Label>
+                  <div class="flex gap-2">
+                    <Input id="ytKey" v-model="youtubeKey" type="password" class="font-mono text-xs" :placeholder="cfg.youtube.hasKey ? '••••••••' : 'AIza…'" />
+                    <Button :disabled="!!busy || (!youtubeKey.trim() && !cfg.youtube.hasKey)" @click="saveYouTubeKey">
+                      {{ youtubeKey.trim() || !cfg.youtube.hasKey ? t('youtube.save') : t('youtube.clear') }}
+                    </Button>
+                  </div>
+                  <p v-if="cfg.youtube.hasKey" class="text-xs text-muted-foreground"><Check class="mr-1 inline size-3" />{{ t('youtube.apiKeySet') }}</p>
+                </div>
+                <p class="text-xs text-muted-foreground">{{ t('youtube.playerHint') }}</p>
               </CardContent>
             </Card>
           </TabsContent>

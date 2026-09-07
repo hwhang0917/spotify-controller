@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Artwork from './Artwork.vue'
-import SpotifyMark from './SpotifyMark.vue'
+import SourceLink from './SourceLink.vue'
 import type { Track } from './types'
 import { fmtDuration } from './types'
 
@@ -16,7 +16,7 @@ defineProps<{ track: Track; index?: number; subtitle?: string }>()
       <p class="truncate text-xs text-muted-foreground">
         {{ track.artist || '—' }}<span v-if="subtitle"> · {{ subtitle }}</span>
       </p>
-      <SpotifyMark v-if="track.externalUrl" :href="track.externalUrl" />
+      <SourceLink v-if="track.externalUrl" :href="track.externalUrl" />
     </div>
     <span class="font-mono text-xs text-muted-foreground tabular-nums">{{ fmtDuration(track.duration) }}</span>
     <slot />

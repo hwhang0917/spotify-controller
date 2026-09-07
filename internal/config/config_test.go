@@ -75,3 +75,22 @@ func TestTokenFile(t *testing.T) {
 		t.Fatal("removing twice should be fine")
 	}
 }
+
+func TestYouTubeKeyFile(t *testing.T) {
+	t.Setenv(EnvDir, filepath.Join(t.TempDir(), "data"))
+	if k, err := LoadYouTubeKey(); k != "" || err != nil {
+		t.Fatalf("missing: %q %v", k, err)
+	}
+	if err := SaveYouTubeKey("  AIza-test \n"); err != nil {
+		t.Fatal(err)
+	}
+	if k, _ := LoadYouTubeKey(); k != "AIza-test" {
+		t.Fatalf("trimmed: %q", k)
+	}
+	if err := SaveYouTubeKey(""); err != nil {
+		t.Fatal(err)
+	}
+	if k, _ := LoadYouTubeKey(); k != "" {
+		t.Fatal("removed")
+	}
+}

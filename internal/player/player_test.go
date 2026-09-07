@@ -2,6 +2,7 @@ package player
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -399,4 +400,19 @@ func TestOnPlayFires(t *testing.T) {
 	f.FinishTrack()
 	p.Tick(ctx)
 	eq(t, played, []string{"fake:a", "fake:b"})
+}
+
+func TestPlayFailureKeepsHeadQueued(t *testing.T) {
+	p, f := setup(t)
+	ctx := context.Background()
+	f.Err = errors.New("player not ready")
+	_ = p.Request(ctx, a, g1)
+	f.Err = nil
+	f.Calls = nil // Request logged a failed play; clear so Played() is clean
+	eq(t, queueIDs(p.State()), []string{"a"})
+	p.Tick(ctx)
+	eq(t, f.Played(), []string{"a"})
+	if len(p.State().Queue) != 0 {
+		t.Fatal("head should be popped after a successful retry")
+	}
 }

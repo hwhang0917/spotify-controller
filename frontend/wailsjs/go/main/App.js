@@ -30,3 +30,5 @@ export function AdmitGuest(arg1) { return app()['AdmitGuest'](arg1); }
 export function CreateInvitation(arg1) { return app()['CreateInvitation'](arg1); }
 export function Invitations() { return app()['Invitations'](); }
 export function RevokeInvitation(arg1) { return app()['RevokeInvitation'](arg1); }
+export function YouTubeReport(arg1) { return app()['YouTubeReport'](arg1); }
+export function SetYouTubeAPIKey(arg1) { return app()['SetYouTubeAPIKey'](arg1); }

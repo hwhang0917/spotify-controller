@@ -2,8 +2,8 @@
 
 Office jukebox with votes. One host PC plays the music; everyone on the same
 network opens a web page to see what's playing, request songs, upvote the
-queue, and vote to skip. Music sources are plugins: **Local files** and
-**Spotify** today, more later. The host's Spotify credentials never leave the
+queue, and vote to skip. Music sources are plugins: **Local files**,
+**Spotify**, and **YouTube Music**. The host's credentials never leave the
 host process.
 
 ## How it works
@@ -32,6 +32,10 @@ host process.
   client on the host. vibe-music only sends Web API player commands, so it is a
   non-streaming app. Guests never hold a token; the server searches and queues
   on their behalf.
+- **YouTube is the official embedded player.** Search goes through the YouTube
+  Data API v3 with the host's own key; playback runs in YouTube's IFrame player
+  inside the admin window, which Go drives through Wails events. No audio is
+  fetched or decoded by vibe-music, so it stays within YouTube's terms.
 - **Guests are a cookie plus a display name.** Enough for one vote per person
   and "requested by Kim". The admin can disconnect, remove, or block anyone.
 - **Invitation-only mode.** Flip the switch and newcomers need a link like
@@ -73,6 +77,21 @@ where the format has them. Output goes to the OS default audio device.
 Your dashboard app stays in development mode; only the host authenticates, so
 the 5-user limit is never an issue.
 
+### YouTube Music
+
+1. In the Google Cloud console, enable **YouTube Data API v3** and create an
+   API key. Restrict it to that API.
+2. Paste the key into the admin window's YouTube card and save. It is kept in
+   its own `0600` file, not in the database.
+3. Switch the source to YouTube. The player appears in the admin's player card
+   and must stay visible while YouTube is active; that is a YouTube embed rule.
+   If the browser engine refuses autoplay after a relaunch, click the player
+   once.
+
+Quota: a search costs 100 units of the default 10,000 per day, so roughly 100
+guest searches a day. The guest page debounces typing to make that last.
+Search is limited to YouTube's Music category.
+
 ## Run
 
 Start the guest server from the admin window and share the URL it shows.
@@ -90,8 +109,8 @@ Data lives in `$XDG_CONFIG_HOME/vibe-music/` (Linux),
   reading the file does not let anyone impersonate a guest.
 - Invitation codes are stored as SHA-256 too. The plaintext is shown in the
   admin window only for codes created since the app was launched.
-- The Spotify token must be usable, so it cannot be hashed. It stays in its own
-  `0600` file outside the database. Encrypting it with a key kept next to it
+- The Spotify token and the YouTube API key must be usable, so they cannot be
+  hashed. Each stays in its own `0600` file outside the database. Encrypting it with a key kept next to it
   would add nothing; the OS keychain is the upgrade path if the host is shared.
 - bcrypt is not used because there are no passwords: every secret here is a
   high-entropy random token, where a fast hash is the correct choice.
@@ -123,6 +142,7 @@ main.go, app.go            Wails app: bindings, config, guest server lifecycle
 internal/source/           Source interface (Track, Playback, ArtworkProvider)
 internal/source/local/     folder scan, tags, search, beep playback
 internal/source/spotify/   PKCE connect, Web API remote control, end detection
+internal/source/youtube/   Data API search, embedded IFrame player control
 internal/source/fake/      in-memory source for tests
 internal/player/           queue, votes, skip threshold, poll loop, state fan-out
 internal/config/           settings (in the store) and the Spotify token file
