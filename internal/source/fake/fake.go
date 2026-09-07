@@ -12,14 +12,15 @@ import (
 )
 
 type Source struct {
-	mu      sync.Mutex
-	Library []source.Track
-	Calls   []string // "activate", "play:<id>", "pause", ...
-	Current *source.Track
-	Playing bool
-	Ended   bool
-	Volume  int
-	Err     error // returned from every method when set
+	mu       sync.Mutex
+	Library  []source.Track
+	Calls    []string // "activate", "play:<id>", "pause", ...
+	Current  *source.Track
+	Playing  bool
+	Ended    bool
+	Position time.Duration
+	Volume   int
+	Err      error // returned from every method when set
 }
 
 func New(tracks ...source.Track) *Source { return &Source{Library: tracks, Volume: 100} }
@@ -109,13 +110,20 @@ func (f *Source) SetVolume(_ context.Context, pct int) error {
 	return f.log("volume")
 }
 
+func (f *Source) Seek(_ context.Context, pos time.Duration) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Position = pos
+	return f.log("seek")
+}
+
 func (f *Source) Status(context.Context) (source.Playback, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.Err != nil {
 		return source.Playback{}, f.Err
 	}
-	return source.Playback{Track: f.Current, Playing: f.Playing, Ended: f.Ended, At: time.Now()}, nil
+	return source.Playback{Track: f.Current, Playing: f.Playing, Ended: f.Ended, Position: f.Position, At: time.Now()}, nil
 }
 
 // FinishTrack simulates the current track reaching its end.

@@ -272,3 +272,86 @@ func TestDurationLearnedAtPlayIsBroadcast(t *testing.T) {
 		t.Fatal("expected broadcast when duration becomes known")
 	}
 }
+
+func TestMoveRanksAndVotesBelow(t *testing.T) {
+	p, _ := setup(t)
+	ctx := context.Background()
+	_ = p.Request(ctx, a, g1) // playing
+	_ = p.Request(ctx, b, g1)
+	time.Sleep(time.Millisecond)
+	_ = p.Request(ctx, c, g2)
+	ch, cancel := p.Subscribe()
+	defer cancel()
+	<-ch
+
+	cID := p.State().Queue[1].ID
+	if err := p.Move(cID, 0); err != nil {
+		t.Fatal(err)
+	}
+	eq(t, queueIDs(p.State()), []string{"c", "b"})
+	s := <-ch
+	if s.Event == nil || s.Event.Type != "queue_moved" || s.Event.Title != "C" {
+		t.Fatalf("event: %+v", s.Event)
+	}
+	if p.State().Event != nil {
+		t.Fatal("event must be one-shot")
+	}
+
+	// votes no longer reorder admin-ranked items...
+	bID := p.State().Queue[1].ID
+	_ = p.Vote(bID, g2.ID)
+	_ = p.Vote(bID, g3.ID)
+	eq(t, queueIDs(p.State()), []string{"c", "b"})
+	// ...but new unranked requests sort by votes below them
+	d := source.Track{ID: "d", Title: "D"}
+	e := source.Track{ID: "e", Title: "E"}
+	_ = p.Request(ctx, d, g1)
+	_ = p.Request(ctx, e, g1)
+	_ = p.Request(ctx, e, g2)
+	eq(t, queueIDs(p.State()), []string{"c", "b", "e", "d"})
+
+	if err := p.Move("nope", 0); err != ErrNotInQueue {
+		t.Fatal("unknown item")
+	}
+	_ = p.Move(cID, 99) // clamps to the end
+	eq(t, queueIDs(p.State()), []string{"b", "e", "d", "c"})
+}
+
+func TestSeekBroadcastsEvent(t *testing.T) {
+	p, f := setup(t)
+	ctx := context.Background()
+	if err := p.Seek(ctx, time.Minute); err == nil {
+		t.Fatal("seek with nothing playing should fail")
+	}
+	_ = p.Request(ctx, a, g1)
+	ch, cancel := p.Subscribe()
+	defer cancel()
+	<-ch
+	if err := p.Seek(ctx, 90*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if f.Position != 90*time.Second {
+		t.Fatalf("source not seeked: %v", f.Position)
+	}
+	s := <-ch
+	if s.Event == nil || s.Event.Type != "seek" || s.Event.Position != 90*time.Second || s.NowPlaying.Position != 90*time.Second {
+		t.Fatalf("frame: %+v %+v", s.Event, s.NowPlaying)
+	}
+	// admin skip and admin removal announce too; guest self-removal does not
+	_ = p.Request(ctx, b, g1)
+	_ = p.Request(ctx, c, g2)
+	<-ch
+	<-ch
+	_ = p.Remove(p.State().Queue[1].ID, g2.ID, false)
+	if s := <-ch; s.Event != nil {
+		t.Fatalf("guest removal should be silent: %+v", s.Event)
+	}
+	_ = p.Remove(p.State().Queue[0].ID, "", true)
+	if s := <-ch; s.Event == nil || s.Event.Type != "queue_removed" || s.Event.Title != "B" {
+		t.Fatalf("admin removal event: %+v", s.Event)
+	}
+	p.Skip(ctx)
+	if s := <-ch; s.Event == nil || s.Event.Type != "skipped" || s.Event.Title != "A" {
+		t.Fatalf("skip event: %+v", s.Event)
+	}
+}

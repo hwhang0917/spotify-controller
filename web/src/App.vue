@@ -11,7 +11,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import NowPlaying from './NowPlaying.vue'
 import TrackRow from './TrackRow.vue'
 import LocaleToggle from './LocaleToggle.vue'
+import { toast } from 'vue-sonner'
+import { Toaster } from '@/components/ui/sonner'
 import { t, tError } from './i18n'
+import { fmtDuration } from './types'
 import type { State, Track } from './types'
 
 const SEARCH_DEBOUNCE_MS = 300
@@ -41,14 +44,24 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
   return data as T
 }
 
-async function act(fn: () => Promise<unknown>) {
+// Actions toast their outcome: red on failure, green when fn returns a message.
+async function act(fn: () => Promise<string | void>) {
   error.value = ''
   try {
-    await fn()
+    const msg = await fn()
+    if (msg) toast.success(msg)
   } catch (e) {
     if (e instanceof ApiError && e.code === 'blocked') { blocked.value = true; return }
-    error.value = tError((e as Error).message)
+    const msg = tError((e as Error).message)
+    if (name.value) toast.error(msg)
+    else error.value = msg // name gate shows it inline
   }
+}
+
+// Host actions arrive as a one-shot event on a state frame.
+function announce(ev: State['event']) {
+  if (!ev) return
+  toast.info(t(`toast.${ev.type}`, { title: ev.title ?? '', pos: fmtDuration(ev.position ?? 0) }))
 }
 
 const saveName = () => act(async () => {
@@ -72,10 +85,11 @@ const request = (tr: Track) => act(async () => {
   await api('POST', '/api/queue', tr)
   query.value = ''
   results.value = []
+  return t('toast.requested', { title: tr.title })
 })
-const vote = (id: string) => act(() => api('POST', `/api/queue/${id}/vote`))
-const remove = (id: string) => act(() => api('DELETE', `/api/queue/${id}`))
-const voteSkip = () => act(() => api('POST', '/api/skip'))
+const vote = (id: string) => act(async () => { await api('POST', `/api/queue/${id}/vote`); return t('toast.voted') })
+const remove = (id: string) => act(async () => { await api('DELETE', `/api/queue/${id}`); return t('toast.removed') })
+const voteSkip = () => act(async () => { await api('POST', '/api/skip'); return t('toast.skipVoted') })
 
 const isSpotify = computed(() => state.value?.source?.id === 'spotify')
 
@@ -87,7 +101,11 @@ onMounted(async () => {
   })
   if (blocked.value) return
   es = new EventSource('/api/events')
-  es.addEventListener('state', (e) => { state.value = JSON.parse((e as MessageEvent).data) })
+  es.addEventListener('state', (e) => {
+    const s: State = JSON.parse((e as MessageEvent).data)
+    state.value = s
+    announce(s.event)
+  })
   es.onopen = () => { connected.value = true }
   es.onerror = () => {
     connected.value = false
@@ -130,6 +148,7 @@ onUnmounted(() => es?.close())
 
   <!-- player -->
   <main v-else class="min-h-screen mx-auto max-w-3xl space-y-4 p-4 sm:p-8">
+    <Toaster position="bottom-right" rich-colors close-button />
     <header class="flex items-center justify-between">
       <div>
         <p class="eyebrow">vibe-music</p>
@@ -144,7 +163,6 @@ onUnmounted(() => es?.close())
         <LocaleToggle />
       </div>
     </header>
-    <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
 
     <NowPlaying :state="state" @skip="voteSkip" />
 

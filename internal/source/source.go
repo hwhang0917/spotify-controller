@@ -51,6 +51,8 @@ type Source interface {
 	Resume(ctx context.Context) error
 	Stop(ctx context.Context) error
 	SetVolume(ctx context.Context, percent int) error
+	// Seek moves playback of the current track to pos.
+	Seek(ctx context.Context, pos time.Duration) error
 
 	Status(ctx context.Context) (Playback, error)
 }

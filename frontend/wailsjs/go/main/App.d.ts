@@ -22,3 +22,5 @@ export function RemoveGuest(arg1: string): Promise<void>;
 export function BlockGuest(arg1: string, arg2: boolean): Promise<void>;
 export function RemoveQueueItem(arg1: string): Promise<void>;
 export function PickFolder(): Promise<string>;
+export function MoveQueueItem(arg1: string, arg2: number): Promise<void>;
+export function Seek(arg1: number): Promise<void>;

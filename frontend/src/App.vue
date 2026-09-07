@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Ban, ChevronUp, FolderOpen, FolderPlus, Minus, Pause, Play, Power, RefreshCw, SkipForward, Trash2, Unplug, Users, Volume2, X } from '@lucide/vue'
+import { ArrowDown, ArrowUp, Ban, ChevronUp, FolderOpen, FolderPlus, Minus, Pause, Play, Power, RefreshCw, SkipForward, Trash2, Unplug, Users, Volume2, X } from '@lucide/vue'
 import * as api from '../wailsjs/go/main/App'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 import { Badge } from '@/components/ui/badge'
@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
@@ -108,6 +107,18 @@ const togglePlay = () => run('play', () => (state.value?.nowPlaying?.playing ? a
 const skip = () => run('skip', async () => { await api.Skip(); return t('toast.skipped') })
 const setVolume = (v: number[] | undefined) => v && run('volume', () => api.SetVolume(v[0]))
 const removeItem = (id: string) => run('remove-item', async () => { await api.RemoveQueueItem(id); return t('toast.queueRemoved') })
+const moveItem = (id: string, index: number) => run('move-item', async () => { await api.MoveQueueItem(id, index); return t('toast.queueMoved') })
+
+// Seek slider: follows playback until the admin grabs it, then commits once.
+const seeking = ref<number[] | null>(null)
+const seekValue = computed(() => seeking.value ?? [positionMs.value])
+const durationMs = computed(() => (np.value?.track.duration ?? 0) / NS_PER_MS)
+const onSeekInput = (v: number[] | undefined) => { if (v) seeking.value = v }
+const onSeekCommit = (v: number[] | undefined) => {
+  seeking.value = null
+  if (!v || !np.value) return
+  run('seek', async () => { await api.Seek(Math.round(v[0])); return t('toast.seeked', { pos: fmtDuration(v[0] * NS_PER_MS) }) })
+}
 const kick = (id: string) => run('kick', async () => { await api.KickGuest(id); return t('toast.guestKicked') })
 const removeGuest = (id: string) => run('remove', async () => { await api.RemoveGuest(id); return t('toast.guestRemoved') })
 const block = (g: GuestInfo) => run('block', async () => {
@@ -125,10 +136,6 @@ const positionMs = computed(() => {
   if (!np.value) return 0
   const base = np.value.position / NS_PER_MS
   return np.value.playing ? base + (now.value - new Date(np.value.at).getTime()) : base
-})
-const pct = computed(() => {
-  const d = np.value?.track.duration
-  return d ? Math.min(100, (positionMs.value * NS_PER_MS / d) * 100) : 0
 })
 const online = computed(() => guests.value.filter((g) => g.connections > 0).length)
 
@@ -198,9 +205,13 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
 
                 <div class="space-y-4">
                   <div class="space-y-1.5">
-                    <Progress :model-value="pct" class="h-1.5" />
+                    <Slider
+                      :model-value="seekValue" :max="Math.max(durationMs, 1)" :step="500" :disabled="!np || !durationMs"
+                      class="cursor-pointer"
+                      @update:model-value="onSeekInput" @value-commit="onSeekCommit"
+                    />
                     <div class="flex justify-between font-mono text-xs text-muted-foreground">
-                      <span>{{ fmtDuration(positionMs * NS_PER_MS) }}</span>
+                      <span>{{ fmtDuration(seekValue[0] * NS_PER_MS) }}</span>
                       <span>{{ fmtDuration(np?.track.duration ?? 0) }}</span>
                     </div>
                   </div>
@@ -219,33 +230,46 @@ onUnmounted(() => { stops.forEach((s) => s()); window.clearInterval(poll); windo
               </div>
             </div>
 
-            <div v-if="state?.queue.length" class="border-t">
-              <p class="eyebrow px-6 pt-4">{{ t('queue', { n: state.queue.length }) }}</p>
-              <ScrollArea class="max-h-72">
-                <div class="divide-y px-6 pb-2">
-                  <div v-for="(it, i) in state.queue" :key="it.id" class="flex items-center gap-3 py-2 text-sm">
-                    <span class="w-5 text-right font-mono text-xs text-muted-foreground">{{ i + 1 }}</span>
-                    <Artwork :src="it.track.artworkUrl?.startsWith('http') ? it.track.artworkUrl : undefined" class="size-9" />
-                    <div class="min-w-0 flex-1">
-                      <p class="truncate font-medium">{{ it.track.title }}</p>
-                      <p class="truncate text-xs text-muted-foreground">{{ it.track.artist || '—' }} · {{ it.requestedBy }}</p>
-                    </div>
-                    <Badge variant="outline" class="font-mono tabular-nums"><ChevronUp />{{ it.votes }}</Badge>
+          </CardContent>
+        </Card>
+
+        <!-- Queue -->
+        <Card class="lg:col-start-1 lg:row-start-2">
+          <CardHeader>
+            <CardTitle>{{ t('queue.title') }} <Badge variant="secondary" class="ml-1">{{ state?.queue.length ?? 0 }}</Badge></CardTitle>
+            <CardDescription>{{ t('queue.desc') }}</CardDescription>
+          </CardHeader>
+          <CardContent class="p-0">
+            <p v-if="!state?.queue.length" class="px-6 pb-6 text-sm text-muted-foreground">{{ t('queue.emptyAdmin') }}</p>
+            <ScrollArea v-else class="max-h-[28rem]">
+              <ul class="divide-y">
+                <li v-for="(it, i) in state.queue" :key="it.id" class="flex items-center gap-3 px-6 py-2.5 text-sm">
+                  <span class="w-5 text-right font-mono text-xs text-muted-foreground">{{ i + 1 }}</span>
+                  <Artwork :src="it.track.artworkUrl?.startsWith('http') ? it.track.artworkUrl : undefined" class="size-10" />
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate font-medium">{{ it.track.title }}</p>
+                    <p class="truncate text-xs text-muted-foreground">{{ it.track.artist || '—' }} · {{ it.requestedBy }}</p>
+                  </div>
+                  <span class="font-mono text-xs text-muted-foreground tabular-nums">{{ fmtDuration(it.track.duration) }}</span>
+                  <Badge variant="outline" class="font-mono tabular-nums"><ChevronUp />{{ it.votes }}</Badge>
+                  <div class="flex items-center">
+                    <Button variant="ghost" size="icon-sm" :disabled="i === 0 || !!busy" :aria-label="t('queue.up')" @click="moveItem(it.id, i - 1)"><ArrowUp /></Button>
+                    <Button variant="ghost" size="icon-sm" :disabled="i === state.queue.length - 1 || !!busy" :aria-label="t('queue.down')" @click="moveItem(it.id, i + 1)"><ArrowDown /></Button>
                     <Tooltip>
                       <TooltipTrigger as-child>
-                        <Button variant="ghost" size="icon-sm" :disabled="!!busy" @click="removeItem(it.id)"><X /></Button>
+                        <Button variant="ghost" size="icon-sm" class="text-destructive" :disabled="!!busy" @click="removeItem(it.id)"><X /></Button>
                       </TooltipTrigger>
                       <TooltipContent>{{ t('queue.remove') }}</TooltipContent>
                     </Tooltip>
                   </div>
-                </div>
-              </ScrollArea>
-            </div>
+                </li>
+              </ul>
+            </ScrollArea>
           </CardContent>
         </Card>
 
         <!-- Controls -->
-        <Tabs default-value="server" class="min-w-0">
+        <Tabs default-value="server" class="min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-2">
           <TabsList class="w-full">
             <TabsTrigger value="server" class="flex-1">{{ t('tab.server') }}</TabsTrigger>
             <TabsTrigger value="sources" class="flex-1">{{ t('tab.sources') }}</TabsTrigger>

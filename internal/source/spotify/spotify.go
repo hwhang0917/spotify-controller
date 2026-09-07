@@ -367,6 +367,14 @@ func (s *Source) Stop(ctx context.Context) error {
 	return err
 }
 
+func (s *Source) Seek(ctx context.Context, pos time.Duration) error {
+	c, err := s.getClient()
+	if err != nil {
+		return err
+	}
+	return c.SeekOpt(ctx, int(pos.Milliseconds()), s.playOpts())
+}
+
 func (s *Source) SetVolume(ctx context.Context, pct int) error {
 	c, err := s.getClient()
 	if err != nil {

@@ -312,6 +312,14 @@ func (a *App) BlockGuest(id string, blocked bool) error {
 // RemoveQueueItem drops any queued item regardless of who requested it.
 func (a *App) RemoveQueueItem(id string) error { return a.player.Remove(id, "", true) }
 
+// MoveQueueItem places a queued item at index (0 = next up).
+func (a *App) MoveQueueItem(id string, index int) error { return a.player.Move(id, index) }
+
+// Seek moves the current track to the given millisecond offset.
+func (a *App) Seek(ms int) error {
+	return uiError(a.player.Seek(a.ctx, time.Duration(ms)*time.Millisecond))
+}
+
 // --- playback (admin override) ---
 
 func (a *App) GetState() player.State  { return a.player.State() }

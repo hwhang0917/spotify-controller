@@ -36,8 +36,21 @@ type QueueItem struct {
 	RequestedAt     time.Time    `json:"requestedAt"`
 	Votes           int          `json:"votes"`
 	// Mine is set per recipient by the server (the requester's cookie ID must not leak).
-	Mine  bool `json:"mine,omitempty"`
+	Mine bool `json:"mine,omitempty"`
+	// rank > 0 means the admin placed this item by hand; ranked items come
+	// first in rank order and votes no longer move them. Unranked requests
+	// below still sort by votes. ponytail: "admin curates the top, guests vote
+	// on the rest"; a full manual mode can replace this if it confuses people.
+	rank  int
 	votes map[string]struct{}
+}
+
+// Event is a one-shot notice attached to a single state frame so UIs can
+// toast what the host just did.
+type Event struct {
+	Type     string        `json:"type"` // "seek", "queue_moved", "queue_removed", "skipped"
+	Title    string        `json:"title,omitempty"`
+	Position time.Duration `json:"position,omitempty"`
 }
 
 type NowPlaying struct {
@@ -62,6 +75,7 @@ type State struct {
 	SkipThreshold int         `json:"skipThreshold"`
 	Volume        int         `json:"volume"`
 	Guests        int         `json:"guests"`
+	Event         *Event      `json:"event,omitempty"`
 }
 
 type Options struct {
@@ -84,6 +98,7 @@ type Player struct {
 	lastPlay  time.Time
 	subs      map[chan State]struct{}
 	lastSig   string
+	pending   *Event // attached to the next broadcast, which is then forced
 	poll      time.Duration
 	skipRatio float64
 }
@@ -262,6 +277,9 @@ func (p *Player) Remove(itemID, guestID string, admin bool) error {
 			return ErrNotOwner
 		}
 		p.queue = append(p.queue[:i], p.queue[i+1:]...)
+		if admin {
+			p.pending = &Event{Type: "queue_removed", Title: it.Track.Title}
+		}
 		p.broadcastIfChanged()
 		return nil
 	}
@@ -285,10 +303,59 @@ func (p *Player) VoteSkip(ctx context.Context, guestID string) bool {
 	return skipped
 }
 
+// Move places a queued item at index (0 = next up). All current items become
+// admin-ranked in their resulting order; see QueueItem.rank.
+func (p *Player) Move(itemID string, index int) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	from := -1
+	for i, it := range p.queue {
+		if it.ID == itemID {
+			from = i
+		}
+	}
+	if from < 0 {
+		return ErrNotInQueue
+	}
+	index = max(0, min(len(p.queue)-1, index))
+	it := p.queue[from]
+	rest := append(append([]*QueueItem{}, p.queue[:from]...), p.queue[from+1:]...)
+	p.queue = append(append(append([]*QueueItem{}, rest[:index]...), it), rest[index:]...)
+	for i, q := range p.queue {
+		q.rank = i + 1
+	}
+	p.pending = &Event{Type: "queue_moved", Title: it.Track.Title}
+	p.broadcastIfChanged()
+	return nil
+}
+
+// Seek moves the current track to pos and tells everyone.
+func (p *Player) Seek(ctx context.Context, pos time.Duration) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.active == nil || p.now.Track == nil {
+		return errors.New("nothing playing")
+	}
+	if err := p.active.Seek(ctx, pos); err != nil {
+		return err
+	}
+	if st, err := p.active.Status(ctx); err == nil {
+		p.now = st
+	} else {
+		p.now.Position, p.now.At = pos, time.Now()
+	}
+	p.pending = &Event{Type: "seek", Position: pos}
+	p.broadcastIfChanged()
+	return nil
+}
+
 // Skip is the admin override.
 func (p *Player) Skip(ctx context.Context) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.now.Track != nil {
+		p.pending = &Event{Type: "skipped", Title: p.now.Track.Title}
+	}
 	p.advance(ctx)
 	p.broadcastIfChanged()
 }
@@ -407,11 +474,17 @@ func (p *Player) advance(ctx context.Context) {
 
 func (p *Player) sortQueue() {
 	sort.SliceStable(p.queue, func(i, j int) bool {
-		vi, vj := len(p.queue[i].votes), len(p.queue[j].votes)
-		if vi != vj {
-			return vi > vj
+		a, b := p.queue[i], p.queue[j]
+		if (a.rank > 0) != (b.rank > 0) {
+			return a.rank > 0 // admin-ranked first
 		}
-		return p.queue[i].RequestedAt.Before(p.queue[j].RequestedAt)
+		if a.rank > 0 {
+			return a.rank < b.rank
+		}
+		if va, vb := len(a.votes), len(b.votes); va != vb {
+			return va > vb
+		}
+		return a.RequestedAt.Before(b.RequestedAt)
 	})
 }
 
@@ -464,10 +537,11 @@ func (s State) signature() string {
 func (p *Player) broadcastIfChanged() {
 	s := p.snapshot()
 	sig := s.signature()
-	if sig == p.lastSig {
+	if sig == p.lastSig && p.pending == nil {
 		return
 	}
 	p.lastSig = sig
+	s.Event, p.pending = p.pending, nil
 	for ch := range p.subs {
 		select {
 		case ch <- s:

@@ -276,6 +276,19 @@ func (s *Source) stopLocked() {
 	s.ended.Store(false)
 }
 
+func (s *Source) Seek(_ context.Context, pos time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.stream == nil {
+		return nil
+	}
+	n := max(0, min(s.stream.Len()-1, s.format.SampleRate.N(pos)))
+	speaker.Lock()
+	err := s.stream.Seek(n)
+	speaker.Unlock()
+	return err
+}
+
 func (s *Source) SetVolume(_ context.Context, pct int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
