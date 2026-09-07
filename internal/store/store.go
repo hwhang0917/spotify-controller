@@ -44,6 +44,14 @@ CREATE TABLE IF NOT EXISTS invitations (
 	revoked    INTEGER NOT NULL DEFAULT 0,
 	uses       INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS plays (
+	source      TEXT NOT NULL,
+	track_id    TEXT NOT NULL,
+	track       TEXT NOT NULL,               -- latest source.Track JSON
+	count       INTEGER NOT NULL DEFAULT 0,
+	last_played TEXT NOT NULL,
+	PRIMARY KEY (source, track_id)
+);
 CREATE TABLE IF NOT EXISTS queue (
 	position          INTEGER PRIMARY KEY,
 	id                TEXT NOT NULL,
@@ -305,6 +313,34 @@ func (s *Store) LoadQueue() ([]QueueRow, error) {
 		it.RequestedAt, _ = time.Parse(time.RFC3339Nano, at)
 		_ = json.Unmarshal([]byte(votes), &it.Votes)
 		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+// --- play history ---
+
+// RecordPlay counts one play of a track on a source, keeping the latest metadata.
+func (s *Store) RecordPlay(sourceID, trackID string, track json.RawMessage, at time.Time) error {
+	_, err := s.db.Exec(`INSERT INTO plays(source, track_id, track, count, last_played) VALUES(?, ?, ?, 1, ?)
+		ON CONFLICT(source, track_id) DO UPDATE SET count = count + 1, track = excluded.track, last_played = excluded.last_played`,
+		sourceID, trackID, string(track), at.UTC().Format(time.RFC3339Nano))
+	return err
+}
+
+// TopTracks returns the most played tracks of a source, ties broken by recency.
+func (s *Store) TopTracks(sourceID string, limit int) ([]json.RawMessage, error) {
+	rows, err := s.db.Query(`SELECT track FROM plays WHERE source = ? ORDER BY count DESC, last_played DESC LIMIT ?`, sourceID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []json.RawMessage
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, err
+		}
+		out = append(out, json.RawMessage(t))
 	}
 	return out, rows.Err()
 }

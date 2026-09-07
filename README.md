@@ -22,9 +22,9 @@ host process.
                     (beep/oto)     client (Web API)
 ```
 
-- **Core owns the queue.** Sorted by votes, then request time. Requesting a
-  song already queued counts as an upvote. Skip happens when a configurable
-  share of connected guests votes (default 50%). The admin can always skip.
+- **Core owns the queue.** Sorted by votes, then request time. The same song
+  can be requested more than once. Skip happens when a configurable share of
+  connected guests votes (default 50%). The admin can always skip.
 - **Sources are mutually exclusive.** One active at a time; switching stops
   playback and clears the queue. Required by Spotify's policy against mixing
   its content with other audio, and it keeps the code simple.

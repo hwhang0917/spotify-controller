@@ -124,3 +124,24 @@ func TestQueueRoundTrip(t *testing.T) {
 		t.Fatalf("expected empty, got %+v", got)
 	}
 }
+
+func TestPlayHistory(t *testing.T) {
+	s := open(t)
+	now := time.Now()
+	a, b := json.RawMessage(`{"id":"a","title":"A"}`), json.RawMessage(`{"id":"b","title":"B"}`)
+	s.RecordPlay("local", "a", a, now)
+	s.RecordPlay("local", "b", b, now.Add(time.Minute))
+	s.RecordPlay("local", "a", json.RawMessage(`{"id":"a","title":"A2"}`), now.Add(2*time.Minute))
+	s.RecordPlay("spotify", "z", json.RawMessage(`{"id":"z"}`), now)
+
+	top, err := s.TopTracks("local", 10)
+	if err != nil || len(top) != 2 || string(top[0]) != `{"id":"a","title":"A2"}` || string(top[1]) != string(b) {
+		t.Fatalf("top: %s %v", top, err)
+	}
+	if top, _ := s.TopTracks("local", 1); len(top) != 1 {
+		t.Fatal("limit")
+	}
+	if top, _ := s.TopTracks("youtube", 10); len(top) != 0 {
+		t.Fatal("other source should be empty")
+	}
+}

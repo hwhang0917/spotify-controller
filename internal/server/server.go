@@ -33,10 +33,16 @@ const (
 	requestBodyKB = 4
 )
 
+// TopFunc returns the most played tracks of a source (play history).
+type TopFunc func(sourceID string, limit int) ([]source.Track, error)
+
 type Server struct {
 	player *player.Player
 	guests *Guests
+	top    TopFunc
 }
+
+const topLimit = 10
 
 // Error codes the guest UI translates.
 const (
@@ -59,11 +65,11 @@ const (
 
 // NewHandler wires the API and serves dist (a built Vite app) as an SPA:
 // unknown paths fall back to index.html so client-side routing works.
-func NewHandler(dist fs.FS, p *player.Player, guests *Guests) http.Handler {
+func NewHandler(dist fs.FS, p *player.Player, guests *Guests, top TopFunc) http.Handler {
 	if guests == nil {
 		panic(errNoStore)
 	}
-	s := &Server{player: p, guests: guests}
+	s := &Server{player: p, guests: guests, top: top}
 	r := chi.NewRouter()
 	r.Use(middleware.Logger, middleware.Recoverer)
 
@@ -80,6 +86,7 @@ func NewHandler(dist fs.FS, p *player.Player, guests *Guests) http.Handler {
 			r.Get("/me", s.me)
 			r.Post("/me", s.setMe)
 			r.Get("/search", s.search)
+			r.Get("/top", s.topTracks)
 			r.Get("/artwork/{id}", s.artwork)
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireName)
@@ -270,6 +277,24 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	tracks, err := s.player.Search(r.Context(), q, searchLimit)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if tracks == nil {
+		tracks = []source.Track{}
+	}
+	writeJSON(w, http.StatusOK, tracks)
+}
+
+// topTracks lists the most played tracks of the active source.
+func (s *Server) topTracks(w http.ResponseWriter, r *http.Request) {
+	src := s.player.ActiveSource()
+	if src == nil || s.top == nil {
+		writeJSON(w, http.StatusOK, []source.Track{})
+		return
+	}
+	tracks, err := s.top(src.ID(), topLimit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if tracks == nil {

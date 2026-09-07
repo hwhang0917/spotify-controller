@@ -101,6 +101,7 @@ type Player struct {
 	pending   *Event // attached to the next broadcast, which is then forced
 	persist   func([]PersistedItem)
 	lastQueue string
+	onPlay    func(sourceID string, t source.Track)
 	poll      time.Duration
 	skipRatio float64
 }
@@ -214,21 +215,13 @@ func (p *Player) Search(ctx context.Context, q string, limit int) ([]source.Trac
 	return src.Search(ctx, q, limit)
 }
 
-// Request queues a track. Requesting something already queued counts as an upvote.
-// If nothing is playing the track starts right away.
+// Request queues a track. The same song may be queued more than once; each
+// request is its own entry. If nothing is playing the track starts right away.
 func (p *Player) Request(ctx context.Context, t source.Track, g Guest) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.active == nil {
 		return errors.New("no active source")
-	}
-	for _, it := range p.queue {
-		if it.Track.ID == t.ID {
-			it.votes[g.ID] = struct{}{}
-			p.sortQueue()
-			p.broadcastIfChanged()
-			return nil
-		}
 	}
 	p.queue = append(p.queue, &QueueItem{
 		ID:              newID(),
@@ -454,6 +447,14 @@ func (p *Player) SetPersister(fn func([]PersistedItem)) {
 	p.persist = fn
 }
 
+// SetOnPlay registers a callback fired whenever a track starts (play history).
+// Runs under the player lock; keep it quick.
+func (p *Player) SetOnPlay(fn func(sourceID string, t source.Track)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.onPlay = fn
+}
+
 // Restore loads a previously persisted queue (at startup, before Run).
 func (p *Player) Restore(items []PersistedItem) {
 	p.mu.Lock()
@@ -536,6 +537,9 @@ func (p *Player) advance(ctx context.Context) {
 	p.lastPlay = time.Now()
 	p.requester = head.RequestedByName
 	p.now = source.Playback{Track: &head.Track, Playing: true, At: p.lastPlay}
+	if p.onPlay != nil {
+		p.onPlay(p.active.ID(), head.Track)
+	}
 }
 
 func (p *Player) sortQueue() {

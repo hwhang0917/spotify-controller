@@ -25,6 +25,12 @@ const state = ref<State | null>(null)
 const query = ref('')
 const results = ref<Track[]>([])
 const searching = ref(false)
+const top = ref<Track[]>([])
+
+// Most played on the active source; refreshed when the source or track changes.
+async function loadTop() {
+  try { top.value = await api<Track[]>('GET', '/api/top') } catch { /* keep the old list */ }
+}
 const error = ref('')
 const connected = ref(false)
 const blocked = ref(false)
@@ -131,8 +137,10 @@ onMounted(async () => {
   es = new EventSource('/api/events')
   es.addEventListener('state', (e) => {
     const s: State = JSON.parse((e as MessageEvent).data)
+    const changed = s.source?.id !== state.value?.source?.id || s.nowPlaying?.track.id !== state.value?.nowPlaying?.track.id
     state.value = s
     announce(s.event)
+    if (changed) loadTop()
   })
   es.onopen = () => { connected.value = true }
   es.onerror = () => {
@@ -237,7 +245,18 @@ onUnmounted(() => { es?.close(); window.clearInterval(health) })
               </TrackRow>
             </div>
           </ScrollArea>
-          <p v-else class="text-sm text-muted-foreground">{{ query ? t('search.empty') : t('search.hint') }}</p>
+          <p v-else-if="query" class="text-sm text-muted-foreground">{{ t('search.empty') }}</p>
+          <template v-else-if="top.length">
+            <p class="eyebrow mb-1">{{ t('search.top') }}</p>
+            <ScrollArea class="max-h-96">
+              <div class="divide-y">
+                <TrackRow v-for="(tr, i) in top" :key="tr.id" :track="tr" :index="i + 1" :subtitle="tr.album">
+                  <Button size="sm" @click="request(tr)"><Plus />{{ t('search.request') }}</Button>
+                </TrackRow>
+              </div>
+            </ScrollArea>
+          </template>
+          <p v-else class="text-sm text-muted-foreground">{{ t('search.hint') }}</p>
         </CardContent>
       </Card>
 

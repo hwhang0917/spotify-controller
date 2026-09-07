@@ -71,24 +71,23 @@ func TestVotesOrderQueueThenRequestTime(t *testing.T) {
 	_ = p.Request(ctx, c, g2)
 	eq(t, queueIDs(p.State()), []string{"b", "c"})
 
-	// duplicate request = upvote, idempotent per guest
-	_ = p.Request(ctx, c, g3)
+	// the same song can be requested again: separate entries, oldest first
 	_ = p.Request(ctx, c, g3)
 	s := p.State()
-	eq(t, queueIDs(s), []string{"c", "b"})
-	if s.Queue[0].Votes != 2 {
-		t.Fatalf("votes = %d", s.Queue[0].Votes)
+	eq(t, queueIDs(s), []string{"b", "c", "c"})
+	if s.Queue[1].ID == s.Queue[2].ID || s.Queue[1].RequestedByName != "Lee" || s.Queue[2].RequestedByName != "Park" {
+		t.Fatalf("duplicates should be distinct items: %+v", s.Queue)
 	}
 
-	// explicit vote on b by two more guests overtakes
-	bID := s.Queue[1].ID
-	_ = p.Vote(bID, g2.ID)
-	_ = p.Vote(bID, g3.ID)
-	_ = p.Vote(bID, g3.ID)
+	// votes reorder; voting twice as the same guest counts once
+	cID := s.Queue[2].ID
+	_ = p.Vote(cID, g1.ID)
+	_ = p.Vote(cID, g2.ID)
+	_ = p.Vote(cID, g2.ID)
 	s = p.State()
-	eq(t, queueIDs(s), []string{"b", "c"})
-	if s.Queue[0].Votes != 3 {
-		t.Fatalf("votes = %d", s.Queue[0].Votes)
+	eq(t, queueIDs(s), []string{"c", "b", "c"})
+	if s.Queue[0].Votes != 3 || s.Queue[0].ID != cID {
+		t.Fatalf("votes = %d id=%s", s.Queue[0].Votes, s.Queue[0].ID)
 	}
 	if err := p.Vote("nope", g1.ID); err == nil {
 		t.Fatal("vote on unknown item should fail")
@@ -307,7 +306,7 @@ func TestMoveRanksAndVotesBelow(t *testing.T) {
 	e := source.Track{ID: "e", Title: "E"}
 	_ = p.Request(ctx, d, g1)
 	_ = p.Request(ctx, e, g1)
-	_ = p.Request(ctx, e, g2)
+	_ = p.Vote(p.State().Queue[3].ID, g2.ID) // e gets a second vote
 	eq(t, queueIDs(p.State()), []string{"c", "b", "e", "d"})
 
 	if err := p.Move("nope", 0); err != ErrNotInQueue {
@@ -388,4 +387,16 @@ func TestPersistAndRestore(t *testing.T) {
 	// and starts playing the head on the next tick
 	p2.Tick(ctx)
 	eq(t, f2.Played(), []string{"c"})
+}
+
+func TestOnPlayFires(t *testing.T) {
+	p, f := setup(t)
+	ctx := context.Background()
+	var played []string
+	p.SetOnPlay(func(src string, tr source.Track) { played = append(played, src+":"+tr.ID) })
+	_ = p.Request(ctx, a, g1)
+	_ = p.Request(ctx, b, g1)
+	f.FinishTrack()
+	p.Tick(ctx)
+	eq(t, played, []string{"fake:a", "fake:b"})
 }

@@ -171,6 +171,12 @@ func (a *App) startup(ctx context.Context) {
 			log.Println("save queue:", err)
 		}
 	})
+	a.player.SetOnPlay(func(sourceID string, t source.Track) {
+		track, _ := json.Marshal(t)
+		if err := a.db.RecordPlay(sourceID, t.ID, track, time.Now()); err != nil {
+			log.Println("record play:", err)
+		}
+	})
 	if rows, err := a.db.LoadQueue(); err == nil {
 		a.player.Restore(fromRows(rows))
 	} else {
@@ -203,6 +209,22 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.db != nil {
 		_ = a.db.Close()
 	}
+}
+
+// topTracks adapts the store's play history to the server's TopFunc.
+func (a *App) topTracks(sourceID string, limit int) ([]source.Track, error) {
+	raws, err := a.db.TopTracks(sourceID, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]source.Track, 0, len(raws))
+	for _, r := range raws {
+		var t source.Track
+		if json.Unmarshal(r, &t) == nil {
+			out = append(out, t)
+		}
+	}
+	return out, nil
 }
 
 func toRows(items []player.PersistedItem) []store.QueueRow {
@@ -428,7 +450,7 @@ func (a *App) StartServer(port int) (string, error) {
 	if err != nil {
 		return "", uiError(err)
 	}
-	srv := &http.Server{Handler: server.NewHandler(web.Dist, a.player, a.guests)}
+	srv := &http.Server{Handler: server.NewHandler(web.Dist, a.player, a.guests, a.topTracks)}
 	go func() {
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Println("guest server:", err)

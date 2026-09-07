@@ -45,7 +45,13 @@ func newTestServer(t *testing.T) (*httptest.Server, *fake.Source, *Guests) {
 		t.Fatal(err)
 	}
 	guests := newGuests(t, nil)
-	ts := httptest.NewServer(NewHandler(dist, p, guests))
+	top := func(src string, limit int) ([]source.Track, error) {
+		if src != "fake" {
+			t.Fatalf("top called for %q", src)
+		}
+		return []source.Track{{ID: "a", Title: "Alpha"}}, nil
+	}
+	ts := httptest.NewServer(NewHandler(dist, p, guests, top))
 	t.Cleanup(ts.Close)
 	return ts, f, guests
 }
@@ -90,7 +96,7 @@ func TestStaticAndSPA(t *testing.T) {
 		t.Fatalf("static: %d", res.StatusCode)
 	}
 	rec := httptest.NewRecorder()
-	NewHandler(fstest.MapFS{}, nil, guests).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	NewHandler(fstest.MapFS{}, nil, guests, nil).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("unbuilt UI: %d", rec.Code)
 	}
@@ -116,6 +122,19 @@ func TestGuestFlow(t *testing.T) {
 	}
 	kim.do("POST", "/api/me", `{"name":"Kim"}`)
 	lee.do("POST", "/api/me", `{"name":"Lee"}`)
+
+	// most played comes from the history hook, scoped to the active source
+	req, _ := http.NewRequest("GET", ts.URL+"/api/top", nil)
+	res, err := kim.http.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var top []map[string]any
+	json.NewDecoder(res.Body).Decode(&top)
+	res.Body.Close()
+	if res.StatusCode != 200 || len(top) != 1 || top[0]["title"] != "Alpha" {
+		t.Fatalf("top: %d %v", res.StatusCode, top)
+	}
 
 	// search goes through the player, never straight to the source
 	res, _ = kim.do("GET", "/api/search?q=alp", "")
@@ -256,7 +275,7 @@ func TestBlockAndKick(t *testing.T) {
 	f := fake.New(source.Track{ID: "a", Title: "Alpha"})
 	p := player.New(player.Options{Sources: []source.Source{f}})
 	p.SetSource(context.Background(), "fake")
-	ts := httptest.NewServer(NewHandler(dist, p, guests))
+	ts := httptest.NewServer(NewHandler(dist, p, guests, nil))
 	defer ts.Close()
 
 	kim := newClient(t, ts.URL)
