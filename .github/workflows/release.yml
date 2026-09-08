@@ -1,9 +1,9 @@
 name: Release
 
 # A release is cut when a change to VERSION lands on master (a merge, not a
-# branch push). The tag v<VERSION> is created by the release step itself; if
-# that tag already exists nothing is published, so merging other changes to
-# master is a no-op here.
+# branch push). The tag v<VERSION> may be pushed by hand (annotated "Release
+# vX.Y.Z") or is created by the release step; if a release for it already
+# exists nothing is published, so merging other changes to master is a no-op.
 on:
   push:
     branches: [master]
@@ -23,7 +23,7 @@ jobs:
         run: |
           tag="v$(tr -d '[:space:]' < VERSION)"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          if gh release view "$tag" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+          if gh release view "$tag" >/dev/null 2>&1; then
             echo "$tag already released; nothing to do"; echo "new=false" >> "$GITHUB_OUTPUT"
           else
             echo "new=true" >> "$GITHUB_OUTPUT"
