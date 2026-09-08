@@ -15,7 +15,8 @@ type Source struct {
 	mu       sync.Mutex
 	id       string
 	Library  []source.Track
-	Calls    []string // "activate", "play:<id>", "pause", ...
+	Folders  map[string]source.Folder // Folder pages by id ("" = top level)
+	Calls    []string                 // "activate", "play:<id>", "pause", ...
 	Current  *source.Track
 	Playing  bool
 	Ended    bool
@@ -187,6 +188,19 @@ func (f *Source) Artist(_ context.Context, id string) (source.Artist, error) {
 		return source.Artist{}, source.ErrNotFound
 	}
 	return a, nil
+}
+
+// Folder implements source.Explorer over Folders.
+func (f *Source) Folder(_ context.Context, id string) (source.Folder, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.log("folder:" + id); err != nil {
+		return source.Folder{}, err
+	}
+	if d, ok := f.Folders[id]; ok {
+		return d, nil
+	}
+	return source.Folder{}, source.ErrNotFound
 }
 
 // Album implements source.Browser over Library by AlbumID.

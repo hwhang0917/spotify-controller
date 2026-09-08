@@ -81,7 +81,8 @@ about 100 searches a day; the guide explains how to ask for more.
 - **Request a song**: search one source at a time, or browse the YouTube Top
   50, the most-played songs on this host, or their own favorites (hearts, kept
   on their phone only).
-- Tap an artist or album to see more from it.
+- Tap an artist or album to see more from it. Local files also have a
+  **Folders** tab that walks the host's music folders like a file manager.
 - Upvote songs in the playlist, remove their own requests, and vote to skip.
   A skip happens when half the connected guests vote (the host can change the
   share, and can always skip).

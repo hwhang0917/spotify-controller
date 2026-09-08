@@ -100,7 +100,24 @@ type Album struct {
 	Tracks     []Track `json:"tracks,omitempty"`
 }
 
-// ErrNotFound: no such artist/album at this source (or the source has no pages).
+// Explorer is optional: sources laid out as folders (local files) let guests
+// walk them like a file manager. The empty ID is the top level.
+type Explorer interface {
+	Folder(ctx context.Context, id string) (Folder, error)
+}
+
+// Folder is one directory: where it sits (Path, top level first), its
+// subfolders (ID, Name, Count only) and the tracks directly inside it.
+type Folder struct {
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Count   int      `json:"count"` // tracks in this folder and below
+	Path    []Folder `json:"path,omitempty"`
+	Folders []Folder `json:"folders,omitempty"`
+	Tracks  []Track  `json:"tracks,omitempty"`
+}
+
+// ErrNotFound: no such artist/album/folder at this source (or the source has no pages).
 var ErrNotFound = &CodedError{Kind: "not_found", Msg: "not found"}
 
 // YearOf reads the year from a date string such as "2019-04-01" or

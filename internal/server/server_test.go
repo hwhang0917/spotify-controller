@@ -460,4 +460,21 @@ func TestBrowse(t *testing.T) {
 	if res, out = c.do("GET", "/api/artist?source=other&id=x", ""); res.StatusCode != 502 || out["error"] != "no_source" {
 		t.Fatalf("disabled source: %d %v", res.StatusCode, out)
 	}
+
+	// folders: top level without an id; empty lists are simply omitted
+	f.Folders = map[string]source.Folder{
+		"":  {Count: 1, Folders: []source.Folder{{ID: "d", Name: "Music", Count: 1}}},
+		"d": {ID: "d", Name: "Music", Count: 1, Path: []source.Folder{{}}, Tracks: f.Library[:1]},
+	}
+	res, out = c.do("GET", "/api/folder?source=fake", "")
+	if res.StatusCode != 200 || len(out["folders"].([]any)) != 1 || out["tracks"] != nil {
+		t.Fatalf("top folder: %d %v", res.StatusCode, out)
+	}
+	res, out = c.do("GET", "/api/folder?source=fake&id=d", "")
+	if res.StatusCode != 200 || out["name"] != "Music" || len(out["tracks"].([]any)) != 1 || len(out["path"].([]any)) != 1 {
+		t.Fatalf("folder: %d %v", res.StatusCode, out)
+	}
+	if res, out = c.do("GET", "/api/folder?source=fake&id=nope", ""); res.StatusCode != 404 || out["error"] != "not_found" {
+		t.Fatalf("unknown folder: %d %v", res.StatusCode, out)
+	}
 }

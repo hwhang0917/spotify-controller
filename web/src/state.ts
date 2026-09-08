@@ -37,10 +37,11 @@ export async function loadTop() {
 
 // Browse mode when the search box is empty: the source's chart (YouTube's
 // default), what's popular here, or the guest's own favorites.
-export const browse = ref<'top' | 'chart' | 'fav'>('top')
+export const browse = ref<'top' | 'chart' | 'fav' | 'dir'>('top')
 export const chart = ref<Track[]>([])
 export const chartLoading = ref(false)
 export const hasChart = computed(() => enabledSources.value.find((s) => s.id === selected.value)?.hasChart ?? false)
+export const hasFolders = computed(() => enabledSources.value.find((s) => s.id === selected.value)?.hasFolders ?? false)
 export const region = computed(() => (locale.value === 'ko' ? 'KR' : (navigator.language.split('-')[1] ?? 'US').toUpperCase()))
 export async function loadChart() {
   if (!selected.value || !hasChart.value) { chart.value = []; return }

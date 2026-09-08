@@ -67,11 +67,12 @@ type NowPlaying struct {
 }
 
 type SourceInfo struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Enabled   bool   `json:"enabled"`
-	Exclusive bool   `json:"exclusive"` // when enabled, no other source may be
-	HasChart  bool   `json:"hasChart"`  // implements source.Charter
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Enabled    bool   `json:"enabled"`
+	Exclusive  bool   `json:"exclusive"`  // when enabled, no other source may be
+	HasChart   bool   `json:"hasChart"`   // implements source.Charter
+	HasFolders bool   `json:"hasFolders"` // implements source.Explorer
 }
 
 // ExclusiveSources cannot share a queue with other sources (Spotify's policy
@@ -215,7 +216,8 @@ func (p *Player) sourcesLocked() []SourceInfo {
 	out := make([]SourceInfo, 0, len(p.order))
 	for _, id := range p.order {
 		_, hasChart := p.sources[id].(source.Charter)
-		out = append(out, SourceInfo{ID: id, Name: p.sources[id].Name(), Enabled: p.enabled[id], Exclusive: ExclusiveSources[id], HasChart: hasChart})
+		_, hasFolders := p.sources[id].(source.Explorer)
+		out = append(out, SourceInfo{ID: id, Name: p.sources[id].Name(), Enabled: p.enabled[id], Exclusive: ExclusiveSources[id], HasChart: hasChart, HasFolders: hasFolders})
 	}
 	return out
 }
@@ -359,6 +361,22 @@ func (p *Player) browser(sourceID string) (source.Browser, error) {
 		return nil, source.ErrNotFound
 	}
 	return b, nil
+}
+
+// Folder lists one folder of a source laid out as files ("" = top level).
+func (p *Player) Folder(ctx context.Context, sourceID, id string) (source.Folder, error) {
+	p.mu.Lock()
+	src, ok := p.sources[sourceID]
+	enabled := p.enabled[sourceID]
+	p.mu.Unlock()
+	if !ok || !enabled {
+		return source.Folder{}, ErrNoSource
+	}
+	e, ok := src.(source.Explorer)
+	if !ok {
+		return source.Folder{}, source.ErrNotFound
+	}
+	return e.Folder(ctx, id)
 }
 
 // Artist shows a source's artist page.

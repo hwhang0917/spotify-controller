@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import FolderView from './FolderView.vue'
 import TrackRow from './TrackRow.vue'
 import SourceIcon from './SourceIcon.vue'
 import { favorites } from './favorites'
 import { t } from './i18n'
-import { browse, canSearch, chart, chartLoading, hasChart, isEnabled, onQuery, pick, query, region, request, results, search, searched, searching, selected, sources, top } from './state'
+import { browse, canSearch, chart, chartLoading, hasChart, hasFolders, isEnabled, onQuery, pick, query, region, request, results, search, searched, searching, selected, sources, top } from './state'
 import type { Track } from './types'
 
 const route = useRoute()
@@ -33,6 +34,7 @@ const tabs = computed(() => [
   ...(hasChart.value ? [{ id: 'chart' as const, label: t('search.chart', { n: chart.value.length || 50, region: region.value }) }] : []),
   { id: 'top' as const, label: t('search.top') },
   { id: 'fav' as const, label: t('search.favorites') },
+  ...(hasFolders.value ? [{ id: 'dir' as const, label: t('search.folders') }] : []),
 ])
 const list = computed<Track[]>(() => browse.value === 'chart' ? chart.value : browse.value === 'fav' ? favorites.value : top.value)
 const emptyText = computed(() => browse.value === 'chart' ? t('search.chartEmpty') : browse.value === 'fav' ? t('search.favEmpty') : t('search.hint'))
@@ -93,7 +95,8 @@ const emptyText = computed(() => browse.value === 'chart' ? t('search.chartEmpty
         <div class="mb-2 flex items-center gap-1.5" role="tablist">
           <Button v-for="tab in tabs" :key="tab.id" size="xs" :variant="browse === tab.id ? 'secondary' : 'ghost'" role="tab" :aria-selected="browse === tab.id" @click="browse = tab.id">{{ tab.label }}</Button>
         </div>
-        <div v-if="browse === 'chart' && chartLoading" class="space-y-3">
+        <FolderView v-if="browse === 'dir'" :source="selected" id="" />
+        <div v-else-if="browse === 'chart' && chartLoading" class="space-y-3">
           <div v-for="i in 4" :key="i" class="flex items-center gap-3">
             <Skeleton class="size-11 rounded-md" />
             <div class="flex-1 space-y-2"><Skeleton class="h-3 w-2/3" /><Skeleton class="h-3 w-1/3" /></div>

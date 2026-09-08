@@ -66,6 +66,7 @@ type Source struct {
 	folders  []string
 	tracks   []source.Track
 	byID     map[string]*entry
+	dirs     map[string]*dir // folder id -> node; "" is the top level listing the roots
 	cache    Cache
 	progress func(done, total int)
 
@@ -208,10 +209,102 @@ func (s *Source) Rescan() (int, error) {
 		byID[id] = &entry{path: p, hasPicture: results[i].HasPicture}
 	}
 
+	dirs := buildDirs(folders, paths)
+
 	s.mu.Lock()
-	s.tracks, s.byID = tracks, byID
+	s.tracks, s.byID, s.dirs = tracks, byID, dirs
 	s.mu.Unlock()
 	return len(tracks), nil
+}
+
+// dir is a folder in the guest-facing tree. Guests only ever see ids, never
+// host paths.
+type dir struct {
+	name   string
+	parent string
+	subs   []string // child ids, sorted by name
+	tracks []int    // indexes into Source.tracks, in path order
+	count  int      // tracks here and below
+}
+
+// buildDirs makes the folder tree from the indexed paths (folders without
+// audio anywhere below them never appear). paths is sorted, so each node's
+// tracks come out in filename order.
+func buildDirs(roots []string, paths []string) map[string]*dir {
+	dirs := map[string]*dir{"": {}}
+	for i, p := range paths {
+		root := rootOf(roots, p)
+		if root == "" {
+			continue
+		}
+		leaf := filepath.Dir(p)
+		dirs[dirID(leaf)] = ensureDir(dirs, root, leaf)
+		dirs[dirID(leaf)].tracks = append(dirs[dirID(leaf)].tracks, i)
+		dirs[""].count++
+		for d := leaf; ; d = filepath.Dir(d) {
+			dirs[dirID(d)].count++
+			if d == root {
+				break
+			}
+		}
+	}
+	for _, d := range dirs {
+		sort.Slice(d.subs, func(a, b int) bool { return dirs[d.subs[a]].name < dirs[d.subs[b]].name })
+	}
+	return dirs
+}
+
+// ensureDir returns the node for path d under root, creating it and its
+// ancestors up to the root (which hangs off the "" top level).
+func ensureDir(dirs map[string]*dir, root, d string) *dir {
+	id := dirID(d)
+	if n, ok := dirs[id]; ok {
+		return n
+	}
+	parent := ""
+	if d != root {
+		parent = dirID(filepath.Dir(d))
+		ensureDir(dirs, root, filepath.Dir(d))
+	}
+	n := &dir{name: filepath.Base(d), parent: parent}
+	dirs[id] = n
+	dirs[parent].subs = append(dirs[parent].subs, id)
+	return n
+}
+
+// rootOf: the configured folder p lives in, "" if none (should not happen for
+// a walked path). ponytail: first match; nested roots list files twice already.
+func rootOf(roots []string, p string) string {
+	for _, r := range roots {
+		r = filepath.Clean(r)
+		if strings.HasPrefix(p, r+string(filepath.Separator)) {
+			return r
+		}
+	}
+	return ""
+}
+
+func dirID(path string) string { return shortID("dir\x00" + path) }
+
+// Folder implements source.Explorer.
+func (s *Source) Folder(_ context.Context, id string) (source.Folder, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n, ok := s.dirs[id]
+	if !ok {
+		return source.Folder{}, source.ErrNotFound
+	}
+	f := source.Folder{ID: id, Name: n.name, Count: n.count}
+	for p := n.parent; id != ""; id, p = p, s.dirs[p].parent {
+		f.Path = append([]source.Folder{{ID: p, Name: s.dirs[p].name}}, f.Path...)
+	}
+	for _, c := range n.subs {
+		f.Folders = append(f.Folders, source.Folder{ID: c, Name: s.dirs[c].name, Count: s.dirs[c].count})
+	}
+	for _, i := range n.tracks {
+		f.Tracks = append(f.Tracks, s.tracks[i])
+	}
+	return f, nil
 }
 
 // index returns the cached record for a file or reads tags and duration.

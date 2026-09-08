@@ -100,6 +100,7 @@ func NewHandler(dist fs.FS, p *player.Player, guests *Guests, top TopFunc, onErr
 			r.Get("/chart", s.chart)
 			r.Get("/artist", s.artist)
 			r.Get("/album", s.album)
+			r.Get("/folder", s.folder)
 			r.Get("/artwork/{source}/{id}", s.artwork)
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireName)
@@ -441,6 +442,17 @@ func (s *Server) album(w http.ResponseWriter, r *http.Request) {
 		a.Tracks = []source.Track{}
 	}
 	writeJSON(w, http.StatusOK, a)
+}
+
+// folder serves one level of a source's folder tree (?source=&id=; empty id = top).
+func (s *Server) folder(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	f, err := s.player.Folder(r.Context(), q.Get("source"), q.Get("id"))
+	if err != nil {
+		s.browseError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, f) // empty folders/tracks are omitted; the UI defaults them
 }
 
 // browseError: a missing page is a plain 404; anything else is the source failing.

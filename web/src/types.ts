@@ -34,6 +34,17 @@ export interface Artist {
   albums: Album[]
 }
 
+// One level of a source's folder tree ("" = top). path is the breadcrumb,
+// top level first; folders/tracks are omitted by the server when empty.
+export interface Folder {
+  id: string
+  name: string
+  count: number
+  path?: Folder[]
+  folders?: Folder[]
+  tracks?: Track[]
+}
+
 export interface QueueItem {
   id: string
   track: Track
@@ -44,7 +55,7 @@ export interface QueueItem {
 }
 
 export interface State {
-  sources: { id: string; name: string; enabled: boolean; exclusive: boolean; hasChart: boolean }[]
+  sources: { id: string; name: string; enabled: boolean; exclusive: boolean; hasChart: boolean; hasFolders: boolean }[]
   nowPlaying: {
     track: Track
     playing: boolean

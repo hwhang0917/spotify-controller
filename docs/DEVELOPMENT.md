@@ -134,6 +134,7 @@ web/                       guest UI (Vue + Vite + Tailwind + shadcn-vue + vue-ro
 | GET | `/api/top?source` | 10 most played here (from `plays`) |
 | GET | `/api/chart?source&region` | Top 50 (`source.Charter`) |
 | GET | `/api/artist?source&id`, `/api/album?source&id` | browse pages (`source.Browser`) |
+| GET | `/api/folder?source&id` | one level of the folder tree, empty id = top (`source.Explorer`) |
 | GET | `/api/artwork/{source}/{id}` | local artwork |
 | POST | `/api/queue`, `/api/queue/{id}/vote`, `/api/skip`; DELETE `/api/queue/{id}` | need a name |
 

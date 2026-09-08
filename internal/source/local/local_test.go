@@ -170,3 +170,44 @@ func TestBrowse(t *testing.T) {
 		t.Fatalf("unknown: %v", err)
 	}
 }
+
+func TestFolders(t *testing.T) {
+	sep := string(filepath.Separator)
+	root := filepath.Join("music")
+	paths := []string{
+		filepath.Join(root, "Pixies", "Doolittle", "01 Debaser.mp3"),
+		filepath.Join(root, "Radiohead", "Kid A", "01 Everything.mp3"),
+		filepath.Join(root, "Radiohead", "OK Computer", "01 Airbag.mp3"),
+		filepath.Join(root, "Radiohead", "OK Computer", "02 Paranoid.mp3"),
+		filepath.Join(root, "loose.mp3"),
+	}
+	s := New([]string{root + sep}) // trailing separator must not matter
+	for i, p := range paths {
+		s.tracks = append(s.tracks, source.Track{ID: shortID(p), Title: filepath.Base(p)})
+		_ = i
+	}
+	s.dirs = buildDirs(s.folders, paths)
+
+	top, err := s.Folder(context.Background(), "")
+	if err != nil || top.Count != 5 || len(top.Folders) != 1 || top.Folders[0].Name != "music" || len(top.Path) != 0 {
+		t.Fatalf("top: %+v %v", top, err)
+	}
+	music, err := s.Folder(context.Background(), top.Folders[0].ID)
+	if err != nil || len(music.Folders) != 2 || music.Folders[0].Name != "Pixies" || music.Folders[1].Count != 3 || len(music.Tracks) != 1 || music.Tracks[0].Title != "loose.mp3" {
+		t.Fatalf("music: %+v %v", music, err)
+	}
+	if len(music.Path) != 1 || music.Path[0].ID != "" {
+		t.Fatalf("path of a root folder: %+v", music.Path)
+	}
+	rh, _ := s.Folder(context.Background(), music.Folders[1].ID)
+	ok, err := s.Folder(context.Background(), rh.Folders[1].ID)
+	if err != nil || ok.Name != "OK Computer" || len(ok.Tracks) != 2 || ok.Tracks[1].Title != "02 Paranoid.mp3" || len(ok.Folders) != 0 {
+		t.Fatalf("ok computer: %+v %v", ok, err)
+	}
+	if names := []string{ok.Path[0].Name, ok.Path[1].Name, ok.Path[2].Name}; len(ok.Path) != 3 || names[1] != "music" || names[2] != "Radiohead" {
+		t.Fatalf("breadcrumb: %v", names)
+	}
+	if _, err := s.Folder(context.Background(), "nope"); err != source.ErrNotFound {
+		t.Fatalf("unknown: %v", err)
+	}
+}
