@@ -25,6 +25,13 @@ import {
 const route = useRoute()
 const router = useRouter()
 const home = computed(() => route.path === '/')
+// Pages nest home → search → artist → album. Back retraces the guest's own
+// steps; a page opened from a shared link has none, so it goes up one level.
+const parent = computed(() => (route.path === '/search' ? '/' : '/search'))
+function back() {
+  if (window.history.state?.back) router.back()
+  else router.replace(parent.value)
+}
 const showBar = computed(() => !home.value && !!state.value?.nowPlaying)
 
 function confirmRequest() {
@@ -110,11 +117,9 @@ onUnmounted(teardown)
   <main v-else class="min-h-screen mx-auto max-w-3xl space-y-4 p-4 sm:p-8" :class="[offline ? 'pointer-events-none select-none opacity-50' : '', showBar ? 'pb-28' : '']" :aria-disabled="offline">
     <header class="flex items-center justify-between gap-2">
       <div class="flex min-w-0 items-center gap-2">
-        <Button v-if="!home" variant="ghost" size="icon-sm" as-child>
-          <RouterLink to="/" :aria-label="t('home.back')"><ArrowLeft /></RouterLink>
-        </Button>
+        <Button v-if="!home" variant="ghost" size="icon-sm" :aria-label="t('home.back')" :title="t('home.back')" @click="back"><ArrowLeft /></Button>
         <div class="min-w-0">
-          <p class="eyebrow">vibe-music</p>
+          <p class="eyebrow"><RouterLink to="/" class="hover:underline">vibe-music</RouterLink></p>
           <h1 class="truncate text-xl font-semibold tracking-tight">{{ t('header.hi', { name }) }}</h1>
         </div>
       </div>

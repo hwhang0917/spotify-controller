@@ -26,9 +26,7 @@ export const selected = computed(() => enabledSources.value.find((s) => s.id ===
 export const canSearch = computed(() => selected.value !== '')
 export const isEnabled = (id: string) => enabledSources.value.some((s) => s.id === id)
 export function pick(id: string) {
-  if (!isEnabled(id)) return
-  chosen.value = id
-  if (query.value.trim()) search()
+  if (isEnabled(id)) chosen.value = id // the selected watcher re-runs any open search
 }
 
 // Most played on the selected source; refreshed when it or the track changes.
@@ -56,6 +54,7 @@ watch(selected, (id, prev) => {
   results.value = []
   browse.value = hasChart.value ? 'chart' : 'top'
   loadTop()
+  if (searched.value) search() // same question, new source
 })
 watch([browse, selected, hasChart], () => { if (browse.value === 'chart') loadChart() })
 
@@ -153,8 +152,13 @@ export const saveName = () => act(async () => {
 
 // Search runs on Enter or the button, not on every keystroke: YouTube
 // searches cost quota and Spotify rate-limits per app.
+// `searched` is the query the results answer; empty means the guest is
+// browsing. It is set even before a source is available so the first source
+// to come up runs the search (reloading /search?q=… lands here).
+export const searched = ref('')
 export function search() {
   const q = query.value.trim()
+  searched.value = q
   if (!q || !canSearch.value) { results.value = []; return }
   act(async () => {
     searching.value = true
@@ -163,7 +167,7 @@ export function search() {
   })
 }
 export function onQuery() {
-  if (!query.value.trim()) results.value = []
+  if (!query.value.trim()) search() // emptying the box goes back to browsing
 }
 
 // Requesting a song that is playing or already queued asks first; the same
